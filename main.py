@@ -3,6 +3,7 @@ import random
 import datetime
 import argparse
 import logging
+from logging import info
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,15 +42,15 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
     logs = {metric_name: [] for metric_name in metrics.keys()}
     logs['loss'] = []
 
-    print("> Starting {} epoch.".format(mode))
+    info(f"> Starting {mode} epoch.")
     if mode == 'train':
-        model.train()
+        model.train() 
     else:
         model.eval()  
         
 
     for  i, (inputs , target, edges) in enumerate(dataloader):
-        print("-> Epoch iteration {}.".format(i))
+        info(f"-> Epoch iteration {i}.")
         inputs = inputs.to(device)
         target = target.to(device)
         edges = edges.to(device)
@@ -75,7 +76,7 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
 def main(args):
     
     start = datetime.datetime.now()
-    run_name = "run_{}".format(start.strftime("%y%m%d-%H%M%S"))
+    run_name = f"run_{start:%y%m%d-%H%M%S}"
     out_wgh_path = os.path.join(args.out_path, run_name+'/checkpoints/')
     out_log_path = os.path.join(args.out_path, run_name+'/logs/')
 
@@ -88,7 +89,7 @@ def main(args):
     val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
 
     # Configure the logger
-    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=print)
+    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=info)
     
     training_augmentation = T.Compose([
             T.ToTensor(),
@@ -137,7 +138,7 @@ def main(args):
     num_epochs = 30
 
     for epoch in range(1, num_epochs+1):
-        print('Epoch {}/{}.'.format(epoch, num_epochs))
+        info(f'Epoch {epoch}/{num_epochs}.')
         train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train')
         valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid')
 
@@ -150,12 +151,12 @@ def main(args):
                 os.makedirs(out_wgh_path)
             
             now = datetime.datetime.now()
-            out_name =  '{}_err:{:3f}_ep:{}.pth'.format(args.mode, best_val_score, epoch)
+            out_name =  f'{args.model}_err:{best_val_score:.3f}_ep:{epoch}.pth'
             torch.save(model, os.path.join(out_wgh_path,out_name))
-            print('Model saved!')
+            info('Model saved!')
         
-        np.save(os.path.join(out_log_path, 'train_logs.npy'), train_logs)
-        np.save(os.path.join(out_log_path, 'val_logs.npy'), valid_logs)
+        np.save(os.path.join(out_log_path, f'train_logs.npy'), train_logs)
+        np.save(os.path.join(out_log_path, f'val_logs.npy'), valid_logs)
 
 
 if __name__ == '__main__':
