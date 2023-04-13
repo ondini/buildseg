@@ -6,7 +6,7 @@ import math
 ### ----- Google Maps API ----- ###
 
 class GoogleAPI:
-    def __init__(self, key_path):
+    def __init__(self, key_path='/home/kafkaon1/buildseg/api-keys.json'):
         with open(key_path, "r") as read_file:
             keys = json.load(read_file)
         self.api_key = keys['google']

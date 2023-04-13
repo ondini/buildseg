@@ -29,7 +29,7 @@ class BinaryDiceLoss(nn.Module):
         A_sum = (predict ** 2).sum(dim=1)
         B_sum = (target ** 2).sum(dim=1) 
 
-        loss = 1 - (AB_intersection + self.smooth) / (A_sum + B_sum + self.smooth)
+        loss = 1 - (2 * AB_intersection + self.smooth) / (A_sum + B_sum + self.smooth)
         if self.reduction == 'mean':
             return loss.mean()
         elif self.reduction == 'sum':
@@ -38,12 +38,28 @@ class BinaryDiceLoss(nn.Module):
             return loss
         
 class WeightedBCELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
+    """ Weighted BCE loss by mask corresponding to label
+    # Args
+        reduction: Reduction method after forward for batch
         
-    def forward(self, inputs, targets, boundaries):
-        loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none', pos_weight=boundaries)
-        return loss.mean()
+        predict: Batch of predictions, shape [batch_size, N_CLASSES, H, W]
+        target: Target of the same shape
+        weights: Weights of classes of the same shape
+    # Rets
+        Loss single value tensor
+    """
+    def __init__(self, reduction='mean'):
+        super().__init__()
+        self.reduction = reduction
+        
+    def forward(self, predict, target, weights):
+        loss = F.binary_cross_entropy_with_logits(predict, target, reduction='none', pos_weight=weights)
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
 
 class FocalLoss(nn.Module):
     """ Binary-class dice loss 
@@ -68,9 +84,9 @@ class FocalLoss(nn.Module):
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
         if self.reduction == 'mean':
-            return torch.mean(F_loss)
+            return F_loss.mean()
         elif self.reduction == 'sum':
-            return torch.sum(F_loss)
+            return F_loss.sum()
         else:
             return F_loss
 

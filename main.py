@@ -4,7 +4,6 @@ import datetime
 import argparse
 import logging
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -38,19 +37,19 @@ def random_rot90(image):
     k = random.randint(0, 3)
     return torch.rot90(image, k=k, dims=(1, 2))
 
-def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, logging):
+def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
     logs = {metric_name: [] for metric_name in metrics.keys()}
     logs['loss'] = []
 
-    logging.info(f"> Starting {mode} epoch.")
+    print("> Starting {} epoch.".format(mode))
     if mode == 'train':
-        model.train() 
+        model.train()
     else:
         model.eval()  
         
 
     for  i, (inputs , target, edges) in enumerate(dataloader):
-        logging.info(f"-> Epoch iteration {i}.")
+        print("-> Epoch iteration {}.".format(i))
         inputs = inputs.to(device)
         target = target.to(device)
         edges = edges.to(device)
@@ -61,7 +60,7 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, logg
             loss = loss_fn(outputs, target, edges)
 
             for metric_name, metric_fn in metrics.items():
-                metric_value = metric_fn(outputs, target, edges).cpu().detach().numpy()
+                metric_value = metric_fn(outputs, target, edges).cpu().item()
                 logs[metric_name].append(metric_value)
 
             logs['loss'].append(loss.cpu().item())
@@ -76,7 +75,7 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, logg
 def main(args):
     
     start = datetime.datetime.now()
-    run_name = f"run_{start:%y%m%d-%H%M%S}"
+    run_name = "run_{}".format(start.strftime("%y%m%d-%H%M%S"))
     out_wgh_path = os.path.join(args.out_path, run_name+'/checkpoints/')
     out_log_path = os.path.join(args.out_path, run_name+'/logs/')
 
@@ -89,8 +88,8 @@ def main(args):
     val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
 
     # Configure the logger
-    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=logging.INFO)
-
+    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=print)
+    
     training_augmentation = T.Compose([
             T.ToTensor(),
             T.Lambda(random_rot90)
@@ -116,7 +115,9 @@ def main(args):
 
     metrics = {
         "dice": dice_coefficient,
-        "dice_b": dice_coefficient_boundary
+        "dice_b": dice_coefficient_boundary,
+        "precision": precision,
+        "recall": recall,
     }
 
 
@@ -136,9 +137,9 @@ def main(args):
     num_epochs = 30
 
     for epoch in range(1, num_epochs+1):
-        logging.info(f'Epoch {epoch}/{num_epochs}.')
-        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train', logging)
-        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid', logging)
+        print('Epoch {}/{}.'.format(epoch, num_epochs))
+        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train')
+        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid')
 
         train_logs.append(train_log)
         valid_logs.append(valid_log)
@@ -149,21 +150,13 @@ def main(args):
                 os.makedirs(out_wgh_path)
             
             now = datetime.datetime.now()
-            out_name =  f'{args.model}_err:{best_val_score:.3f}_ep:{epoch}.pth'
+            out_name =  '{}_err:{:3f}_ep:{}.pth'.format(args.mode, best_val_score, epoch)
             torch.save(model, os.path.join(out_wgh_path,out_name))
-            logging.info('Model saved!')
+            print('Model saved!')
         
-        np.save(os.path.join(out_log_path, f'train_logs.npy'), train_logs)
-        np.save(os.path.join(out_log_path, f'val_logs.npy'), valid_logs)
+        np.save(os.path.join(out_log_path, 'train_logs.npy'), train_logs)
+        np.save(os.path.join(out_log_path, 'val_logs.npy'), valid_logs)
 
-
-# LOSSES:
-# WEIGHTED BCE by class 
-# WEIGHTED BCE by edges (Ronneberger et al)
-
-# TODOS and ideas - need to choose right loss function, ideally weighed by edges
-# Then we need to choose right metrics, probably normal mIoU, edge IoU and some other edge accuracy metric
-# also there is a possibility of rotation augmentation added to the datasets
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("FVApp training script")
@@ -173,6 +166,7 @@ if __name__ == '__main__':
     parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/checkpoints/dl3_err:0.566_ep:2_04-06_12:24.pth')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
+    parser.add_argument("--dataset_coeff", type=float, default=1/200)
     args = parser.parse_args()
 
     main(args)
