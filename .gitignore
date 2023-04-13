@@ -5,7 +5,7 @@ api-keys.json
 test.ipynb
 *.tmp
 __pycache__
-
+trn.log
 
 # virtual environment
 venv/
