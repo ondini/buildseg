@@ -9,8 +9,8 @@ from tqdm import tqdm
 frame_size = 640
 img_ratio = 0.075/0.1 # resolutions of given dataset and Google - (156543.03392 * math.cos(math.radians(lat))) / (2 ** zoom)
 
-input_dir = '/home/ondin/Developer/FVAPP/data_big/archive/val/'
-output_dir = '/home/ondin/Developer/FVAPP/data_big/archive/val/'
+input_dir = '/home/kafkaon1/FVAPP/data/NZ/val'
+output_dir = '/home/kafkaon1/FVAPP/data/FV/val'
 
 imgs_path = os.path.join(input_dir, 'image')
 labels_path = os.path.join(input_dir, 'label')
@@ -23,8 +23,9 @@ if not os.path.exists(out_imgs_path):
 if not os.path.exists(out_labels_path):
     os.makedirs(out_labels_path)
 
-img_names = os.listdir(imgs_path)
-for img_name in img_names:
+img_names = sorted(os.listdir(imgs_path))
+
+for i, img_name in enumerate(img_names):
     img_path = os.path.join(imgs_path, img_name)
     label_path = os.path.join(labels_path, img_name)
 
@@ -42,7 +43,7 @@ for img_name in img_names:
 
     # Generate a label mask that assigns a unique label to each positive area
     label_mask, num_labels = ndimage.label(positive_label_areas)
-    print("Processing image: ", img_name)
+    print(f"Processing image: {img_name}, {i}/{len(img_names)}.")
 
     # Loop through each positive label area and generate a frame
     for i in tqdm(range(1, num_labels+1), desc='Generating frames'):

@@ -1,0 +1,18 @@
+# sensitive files
+api-keys.json
+
+# temporary files
+test.ipynb
+*.tmp
+__pycache__
+
+
+# virtual environment
+venv/
+
+# big and external files
+data/
+third_party/
+
+# output files
+out/

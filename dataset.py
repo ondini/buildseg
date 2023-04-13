@@ -1,5 +1,5 @@
 import torch
-from PIL import Image
+from PIL import Image, ImageFilter
 import os
 import numpy as np
 
@@ -24,11 +24,12 @@ class FVDataset(torch.utils.data.Dataset):
     # Args
         images_path: path to images folder
         labels_path: path to segmentation label masks folder
+        size_coefficient: percentage of data to be used
         num_classes: number of classes in the dataset
         augmentation: transform for image and mask    
     """
     
-    def __init__(self, images_path, labels_path, num_classes=2, augmentation=None):   
+    def __init__(self, images_path, labels_path, size_coefficient, num_classes=2, augmentation=None):   
         self.images_path = images_path 
         self.image_fns = [image_fn for image_fn in sorted(os.listdir(images_path))]
         self.labels_path = labels_path 
@@ -37,20 +38,25 @@ class FVDataset(torch.utils.data.Dataset):
         self.num_classes = num_classes
         self.augmentation = augmentation
 
+        self.coefficient = size_coefficient
+
     def __len__(self):
-        return len(self.image_fns)
+        return int(len(self.image_fns)*self.coefficient)
 
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
         label_file_path = os.path.join(self.labels_path, self.label_fns[i])
 
         image = np.array(Image.open(image_file_path)) # cv2.cvtColor(cv2.imread(image_file_path), cv2.COLOR_BGR2RGB)
-        label = np.array(Image.open(label_file_path)).astype('float') # cv2.imread(mask_file_path, cv2.IMREAD_GRAYSCALE))
+        labelI = Image.open(label_file_path)
+        label = np.array(labelI).astype('float') # cv2.imread(mask_file_path, cv2.IMREAD_GRAYSCALE))
+        label_border = np.array(labelI.filter(ImageFilter.FIND_EDGES)).astype(bool).astype('float')
 
         if self.augmentation:
-            image, label = self.augmentation(image), self.augmentation(label)
+            image, label, label_border = self.augmentation(image), self.augmentation(label), self.augmentation(label_border)
 
         label = one_hot(label, self.num_classes)
+        label_border = one_hot(label_border, self.num_classes)
         
-        return image, label
+        return image, label, label_border
         

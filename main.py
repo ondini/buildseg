@@ -1,15 +1,23 @@
-import os, cv2
-import numpy as np
+import os
 import random
+import datetime
+import argparse
+import logging
+
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
 
-from models import createDeepLabv3
+from models import createDeepLabv3, createDeepLabv3Plus
 from dataset import FVDataset
-from loss import BinaryDiceLoss
+from losses import FVLoss
+from metrics import intersection_over_union, intersection_over_union_boundary, dice_coefficient, dice_coefficient_boundary, precision, recall
+
+from torchmetrics import JaccardIndex
 
 def visualize(**images):
     """
@@ -30,26 +38,30 @@ def random_rot90(image):
     k = random.randint(0, 3)
     return torch.rot90(image, k=k, dims=(1, 2))
 
-def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
+def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, logging):
     logs = {metric_name: [] for metric_name in metrics.keys()}
     logs['loss'] = []
 
+    logging.info(f"> Starting {mode} epoch.")
     if mode == 'train':
         model.train() 
     else:
         model.eval()  
+        
 
-    for  i, (inputs , target) in enumerate(dataloader):
+    for  i, (inputs , target, edges) in enumerate(dataloader):
+        logging.info(f"-> Epoch iteration {i}.")
         inputs = inputs.to(device)
         target = target.to(device)
+        edges = edges.to(device)
         model.zero_grad()
 
         with torch.set_grad_enabled(mode == 'train'): # gradient calculation only in train mode
-            outputs = model(inputs)['out']
-            loss = loss_fn(outputs, target)
+            outputs = model(inputs)
+            loss = loss_fn(outputs, target, edges)
 
             for metric_name, metric_fn in metrics.items():
-                metric_value = metric_fn(outputs, loss).cpu().detach().numpy()
+                metric_value = metric_fn(outputs, target, edges).cpu().detach().numpy()
                 logs[metric_name].append(metric_value)
 
             logs['loss'].append(loss.cpu().item())
@@ -61,14 +73,23 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
     return logs
 
 
-def main():
-    out_wgh_path = './'
-    train_data_path = '/home/ondin/Developer/FVAPP/data_big/archive/train/image_resized'
-    train_label_path = '/home/ondin/Developer/FVAPP/data_big/archive/train/label_resized'
-    val_data_path = '/home/ondin/Developer/FVAPP/data_big/archive/val/image_resized'
-    val_label_path = '/home/ondin/Developer/FVAPP/data_big/archive/val/label_resized'
+def main(args):
+    
+    start = datetime.datetime.now()
+    run_name = f"run_{start:%y%m%d-%H%M%S}"
+    out_wgh_path = os.path.join(args.out_path, run_name+'/checkpoints/')
+    out_log_path = os.path.join(args.out_path, run_name+'/logs/')
 
-    #class_names = ['background', 'building']
+    os.makedirs(out_wgh_path)
+    os.makedirs(out_log_path)
+
+    train_data_path = os.path.join(args.dataset_path, 'train/image_resized')
+    train_label_path = os.path.join(args.dataset_path, 'train/label_resized')
+    val_data_path = os.path.join(args.dataset_path, 'val/image_resized')
+    val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
+
+    # Configure the logger
+    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=logging.INFO)
 
     training_augmentation = T.Compose([
             T.ToTensor(),
@@ -78,52 +99,62 @@ def main():
 
     train_dataset = FVDataset(
         train_data_path, train_label_path, 
-        augmentation=training_augmentation
+        augmentation=training_augmentation,
+        size_coefficient = 1/20
     )
 
     valid_dataset = FVDataset(
         val_data_path, val_label_path,
-        augmentation = T.ToTensor()
+        augmentation = T.ToTensor(),
+        size_coefficient = 1/20
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=10)
+    valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4)
 
-    metrics = {}
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    metrics = {
+        "dice": dice_coefficient,
+        "dice_b": dice_coefficient_boundary
+    }
 
-    model = createDeepLabv3(2)
+
+    if args.checkpoint_path:
+        model = torch.load(args.checkpoint_path)
+    else:
+        model = createDeepLabv3Plus(2)
     model.to(device)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.0001)
-    loss = BinaryDiceLoss()
+    loss = FVLoss()
+    
 
-    best_val_score = 0.0
+    best_val_score = float('inf')
     train_logs, valid_logs = [], []
 
-    num_epochs = 10
+    num_epochs = 30
 
-    for epoch in range(0, num_epochs):
-        print(f'Epoch {epoch}/{num_epochs - 1}.')
-        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train')
-        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid')
+    for epoch in range(1, num_epochs+1):
+        logging.info(f'Epoch {epoch}/{num_epochs}.')
+        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train', logging)
+        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid', logging)
 
-        train_logs_list.append(train_logs)
-        valid_logs_list.append(valid_logs)
+        train_logs.append(train_log)
+        valid_logs.append(valid_log)
 
-        if best_val_score < valid_logs['loss']:
-            best_val_score = valid_logs['loss']
+        if best_val_score > valid_log['loss']:
+            best_val_score = valid_log['loss']
             if not os.path.exists(out_wgh_path):
                 os.makedirs(out_wgh_path)
             
             now = datetime.datetime.now()
-            out_name =  f'dl3_err:{best_val_score:.3f}_ep:{epoch}_{now:%m-%d_%H:%M}.pth'
+            out_name =  f'{args.model}_err:{best_val_score:.3f}_ep:{epoch}.pth'
             torch.save(model, os.path.join(out_wgh_path,out_name))
-            print('Model saved!')
+            logging.info('Model saved!')
         
-        np.save(os.path.join(out_wgh_path, 'train_logs.npy'), train_logs_list)
-        np.save(os.path.join(out_wgh_path,'valid_logs.npy'), valid_logs_list)
+        np.save(os.path.join(out_log_path, f'train_logs.npy'), train_logs)
+        np.save(os.path.join(out_log_path, f'val_logs.npy'), valid_logs)
 
 
 # LOSSES:
@@ -135,4 +166,13 @@ def main():
 # also there is a possibility of rotation augmentation added to the datasets
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser("FVApp training script")
+    parser.add_argument("--model", type=str,  choices={'Deeplabv3+'}, default='Deeplabv3')
+    parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
+    parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
+    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/checkpoints/dl3_err:0.566_ep:2_04-06_12:24.pth')
+    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/')
+    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
+    args = parser.parse_args()
+
+    main(args)
