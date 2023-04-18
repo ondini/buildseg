@@ -10,11 +10,11 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
-import torchvision.transforms as T
+
 
 from models import createDeepLabv3, createDeepLabv3Plus
 from dataset import FVDataset
-from losses import FVLoss
+from losses import FVLoss, BinaryCrossEntropyLoss, BinaryDiceLoss
 from metrics import intersection_over_union, intersection_over_union_boundary, dice_coefficient, dice_coefficient_boundary, precision, recall
 
 def visualize(**images):
@@ -31,10 +31,6 @@ def visualize(**images):
         plt.title(name.replace('_',' ').title(), fontsize=20)
         plt.imshow(image)
     plt.show()
-
-def random_rot90(image):
-    k = random.randint(0, 3)
-    return torch.rot90(image, k=k, dims=(1, 2))
 
 def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
     logs = {metric_name: [] for metric_name in metrics.keys()}
@@ -55,7 +51,7 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
 
         with torch.set_grad_enabled(mode == 'train'): # gradient calculation only in train mode
             outputs = model(inputs)
-            loss = loss_fn(outputs, target, edges)
+            loss = loss_fn(outputs.float(), target.float(), edges)
 
             for metric_name, metric_fn in metrics.items():
                 metric_value = metric_fn(outputs, target, edges).cpu().item()
@@ -87,23 +83,17 @@ def main(args):
 
     # Configure the logger
     logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=logging.INFO)
-    
-    training_augmentation = T.Compose([
-            T.ToTensor(),
-            T.Lambda(random_rot90)
-        ]
-    )
 
     train_dataset = FVDataset(
         train_data_path, train_label_path, 
-        augmentation=training_augmentation,
-        size_coefficient = 1/20
+        augmentation=True,
+        size_coefficient = args.dataset_coeff
     )
 
     valid_dataset = FVDataset(
         val_data_path, val_label_path,
-        augmentation = T.ToTensor(),
-        size_coefficient = 1/20
+        augmentation=False,
+        size_coefficient = args.dataset_coeff
     )
 
     train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=10)
@@ -118,11 +108,13 @@ def main(args):
         "recall": recall,
     }
 
+    checkpoint_metric = 'precision'
+
 
     if args.checkpoint_path:
         model = torch.load(args.checkpoint_path)
     else:
-        model = createDeepLabv3Plus(2)
+        model = createDeepLabv3Plus(1)
     model.to(device)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.0001)
@@ -142,8 +134,8 @@ def main(args):
         train_logs.append(train_log)
         valid_logs.append(valid_log)
 
-        if best_val_score > valid_log['loss']:
-            best_val_score = valid_log['loss']
+        if best_val_score > valid_log[checkpoint_metric]:
+            best_val_score = valid_log[checkpoint_metric]
             if not os.path.exists(out_wgh_path):
                 os.makedirs(out_wgh_path)
             
@@ -160,10 +152,10 @@ if __name__ == '__main__':
     parser.add_argument("--model", type=str,  choices={'Deeplabv3+'}, default='Deeplabv3')
     parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
-    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/checkpoints/dl3_err:0.566_ep:2_04-06_12:24.pth')
+    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/run_230418-183542/checkpoints/Deeplabv3_err:0.850_ep:8.pth')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--dataset_coeff", type=float, default=1/200)
+    parser.add_argument("--dataset_coeff", type=float, default=1/20)
     args = parser.parse_args()
 
     main(args)

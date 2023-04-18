@@ -11,27 +11,28 @@ class GoogleAPI:
             keys = json.load(read_file)
         self.api_key = keys['google']
 
-    def get_satellite_image(coords, zoom=20, size=[600, 600], save_path='./tmp_sat.jpg'):
+    def get_satellite_image(self, coords, zoom=20, save_path='./tmp_sat.jpg', size=[600, 600]):
         url_sat = f'https://maps.googleapis.com/maps/api/staticmap?center={coords[0]},{coords[1]}&zoom={zoom}&size={size[0]}x{size[1]}&maptype=satellite&key={self.api_key}'
+        print(url_sat)
         urllib.request.urlretrieve(url_sat, save_path)
 
-    def get_streetview_image(coords, size=[600, 600], fov=100, pitch=0, heading=0, save_path='./tmp_str.jpg'):
+    def get_streetview_image(self, coords, size=[600, 600], fov=100, pitch=0, heading=0, save_path='./tmp_str.jpg'):
         url_str = f'https://maps.googleapis.com/maps/api/streetview?size={size[0]}x{size[1]}&location={coords[0]},{coords[1]}&fov={fov}&pitch={pitch}&heading={heading}&key={self.api_key}'
         urllib.request.urlretrieve(url_str, save_path)
 
-    def geoencode_address(address):
+    def geoencode_address(self, address):
         address_encoded = urllib.parse.quote(address)
         url_geo = f'https://maps.googleapis.com/maps/api/geocode/json?address={address_encoded}&key={self.api_key}'
         response = urllib.request.urlopen(url_geo).read()
         data = json.loads(response.decode('utf-8'))
         return data['results'][0]['geometry']['location']['lat'], data['results'][0]['geometry']['location']['lng']
 
-    def get_streetview_metadata(address):
+    def get_streetview_metadata(self, address):
         # TODO BY : https://developers.google.com/maps/documentation/streetview/metadata
         #https://maps.googleapis.com/maps/api/streetview/metadata?parameters
         pass 
 
-    def validate_address(address):
+    def validate_address(self, address):
         # TODO BY : https://developers.google.com/maps/documentation/address-validation/requests-validate-address
         pass
 

@@ -2,6 +2,8 @@ import torch
 from PIL import Image, ImageFilter
 import os
 import numpy as np
+import random
+import torchvision.transforms as T
 
 def one_hot(label, num_classes):
     """
@@ -29,7 +31,7 @@ class FVDataset(torch.utils.data.Dataset):
         augmentation: transform for image and mask    
     """
     
-    def __init__(self, images_path, labels_path, size_coefficient, num_classes=2, augmentation=None):   
+    def __init__(self, images_path, labels_path, size_coefficient, num_classes=2, augmentation=False):   
         self.images_path = images_path 
         self.image_fns = [image_fn for image_fn in sorted(os.listdir(images_path))]
         self.labels_path = labels_path 
@@ -42,6 +44,15 @@ class FVDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return int(len(self.image_fns)*self.coefficient)
+    
+    def transform(self, image, label, label_border):
+        image, label, label_border = T.ToTensor()(image), T.ToTensor()(label), T.ToTensor()(label_border)
+        if self.augmentation:
+            k = random.randint(0, 3)
+            image, label, label_border  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2)), torch.rot90(label_border, k=k, dims=(1, 2))
+        
+        return image, label, label_border
+        
 
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
@@ -52,11 +63,11 @@ class FVDataset(torch.utils.data.Dataset):
         label = np.array(labelI).astype('float') # cv2.imread(mask_file_path, cv2.IMREAD_GRAYSCALE))
         label_border = np.array(labelI.filter(ImageFilter.FIND_EDGES)).astype(bool).astype('float')
 
-        if self.augmentation:
-            image, label, label_border = self.augmentation(image), self.augmentation(label), self.augmentation(label_border)
-
-        label = one_hot(label, self.num_classes)
-        label_border = one_hot(label_border, self.num_classes)
+        image, label, label_border = self.transform(image, label, label_border)
+        
+        if self.num_classes > 2:
+            label = one_hot(label, self.num_classes)
+            label_border = one_hot(label_border, self.num_classes)
         
         return image, label, label_border
         

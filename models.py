@@ -27,13 +27,13 @@ def createDeepLabv3Plus(outputchannels):
     """
     ENCODER = 'resnet50'
     ENCODER_WEIGHTS = 'imagenet'
-    ACTIVATION = 'sigmoid' # could be None for logits or 'softmax2d' for multiclass segmentation
+    #ACTIVATION = 'sigmoid' # could be None for logits or 'softmax2d' for multiclass segmentation
 
     # create segmentation model with pretrained encoder
     model = smp.DeepLabV3Plus(
         encoder_name=ENCODER, 
         encoder_weights=ENCODER_WEIGHTS, 
         classes=outputchannels, 
-        activation=ACTIVATION,
+        activation='sigmoid',
     )
     return model

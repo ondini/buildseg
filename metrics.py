@@ -43,10 +43,10 @@ def dice_coefficient(predict, targets, boundaries, threshold=0.5):
     
     # Calculate the intersection and union
     intersection = (predict * targets).sum(dim=1)
-    sum = (predict + targets).sum(dim=1)
+    total = (predict + targets).sum(dim=1)
     
     # Calculate the Dice coefficient for each image in the batch
-    dice = (2 * intersection) / (sum + 1e-8)
+    dice = (2 * intersection) / (total + 1e-8)
     return dice.mean()
 
 def dice_coefficient_boundary(predict, targets, boundaries, threshold=0.5):
@@ -59,10 +59,10 @@ def dice_coefficient_boundary(predict, targets, boundaries, threshold=0.5):
     
     # Calculate the intersection and union
     intersection = (predict * targets).sum(dim=1)
-    sum = (predict + targets).sum(dim=1)
+    total = (predict + targets).sum(dim=1)
     
     # Calculate the Dice coefficient for each image in the batch
-    dice = (2 * intersection) / (sum + 1e-8)
+    dice = (2 * intersection) / (total + 1e-8)
     return dice.mean()
 
 def precision(predict, targets, boundaries, threshold=0.5):

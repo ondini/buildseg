@@ -9,7 +9,7 @@ class BinaryDiceLoss(nn.Module):
         smooth: Smoothing factor
         reduction: Reduction method after forward for batch
 
-        predict: Batch of predictions, shape [batch_size, N_CLASSES, H, W]
+        predict: Batch of logits predictions, shape [batch_size, N_CLASSES, H, W], 
         target: Target of the same shape
     # Rets
         Loss single value tensor
@@ -36,6 +36,26 @@ class BinaryDiceLoss(nn.Module):
             return loss.sum()
         else:
             return loss
+        
+class BinaryCrossEntropyLoss(nn.Module):
+    """ Binary-class BCE loss 
+    # Args
+        reduction: Reduction method after forward for batch
+        
+        predict: Batch of predictions, shape [batch_size, N_CLASSES, H, W]
+        target: Target of the same shape
+    # Rets
+        Loss single value tensor
+    """
+    def __init__(self, reduction='mean'):
+        super().__init__()
+        self.reduction = reduction
+        
+    def forward(self, predict, target):
+        assert predict.shape[0] == target.shape[0], "batch sizes don't match"
+
+        loss = F.F.binary_cross_entropy(predict, target, reduction=self.reduction)
+        return loss
         
 class WeightedBCELoss(nn.Module):
     """ Weighted BCE loss by mask corresponding to label
@@ -73,14 +93,14 @@ class FocalLoss(nn.Module):
     # Rets
         Loss single value tensor
     """
-    def __init__(self, alpha=1, gamma=2, reduction='mean'):
+    def __init__(self, alpha=0.8, gamma=2, reduction='mean'):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
         
     def forward(self, predict, targets):
-        BCE_loss = F.binary_cross_entropy_with_logits(predict, targets, reduction='none')
+        BCE_loss = F.binary_cross_entropy(predict, targets, reduction='none')
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
         if self.reduction == 'mean':
@@ -90,12 +110,77 @@ class FocalLoss(nn.Module):
         else:
             return F_loss
 
+
+class BoundaryLoss(nn.Module):
+    """Boundary Loss proposed in:
+    Alexey Bokhovkin et al., Boundary Loss for Remote Sensing Imagery Semantic Segmentation
+    https://arxiv.org/abs/1905.07852
+    """
+
+    def __init__(self, theta0=3, theta=5):
+        super().__init__()
+        self.theta0 = theta0
+        self.theta = theta
+
+    def forward(self, predict, targets):
+        """
+        Input:
+            - pred: the output from model (before softmax)
+                    shape (N, C, H, W)
+            - gt: ground truth map
+                    shape (N, H, w)
+        Return:
+            - boundary loss, averaged over mini-bathc
+        """
+
+        n, c, _, _ = predict.shape
+
+        # optionally add multiclass onehot of targets
+
+        # boundary map
+        gt_b = F.max_pool2d(
+            1 - targets, kernel_size=self.theta0, stride=1, padding=(self.theta0 - 1) // 2)
+        gt_b -= 1 - targets
+
+        pred_b = F.max_pool2d(
+            1 - predict, kernel_size=self.theta0, stride=1, padding=(self.theta0 - 1) // 2)
+        pred_b -= 1 - predict
+
+        # extended boundary map
+        gt_b_ext = F.max_pool2d(
+            gt_b, kernel_size=self.theta, stride=1, padding=(self.theta - 1) // 2)
+
+        pred_b_ext = F.max_pool2d(
+            pred_b, kernel_size=self.theta, stride=1, padding=(self.theta - 1) // 2)
+
+        # reshape
+        gt_b = gt_b.view(n, c, -1)
+        pred_b = pred_b.view(n, c, -1)
+        gt_b_ext = gt_b_ext.view(n, c, -1)
+        pred_b_ext = pred_b_ext.view(n, c, -1)
+
+        # Precision, Recall
+        P = torch.sum(pred_b * gt_b_ext, dim=2) / (torch.sum(pred_b, dim=2) + 1e-7)
+        R = torch.sum(pred_b_ext * gt_b, dim=2) / (torch.sum(gt_b, dim=2) + 1e-7)
+
+        # Boundary F1 Score
+        BF1 = 2 * P * R / (P + R + 1e-7)
+
+        # summing BF1 Score for each class and average over mini-batch
+        loss = torch.mean(1 - BF1)
+
+        return loss
+
+
 class FVLoss(nn.Module):
-    def __init__(self, alpha=1):
+    def __init__(self, alpha=2):
         super().__init__()
         self.BDC = BinaryDiceLoss()
         self.FL = FocalLoss()
+        self.BL = BoundaryLoss()
         self.alpha = alpha
     
     def forward(self, predict, targets, boundaries):
-        return self.BDC(predict, boundaries)*self.alpha + self.FL(predict, targets)
+        #w_predict = predict*boundaries
+        return self.BL(predict, targets)*self.alpha + self.FL(predict, targets)
+
