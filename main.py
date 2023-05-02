@@ -8,31 +8,17 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
+# torch optim LR scheduler - one cycle LR 
+
 import torch
 from torch.utils.data import DataLoader
 
-
 from models import createDeepLabv3, createDeepLabv3Plus
 from dataset import FVDataset
-from losses import FVLoss, BinaryCrossEntropyLoss, BinaryDiceLoss
-from metrics import intersection_over_union, intersection_over_union_boundary, dice_coefficient, dice_coefficient_boundary, precision, recall
+from losses import FVLoss, BinaryDiceLoss, DistanceLoss, DistanceWeightBCELoss
+from metrics import IoU, IoU_b, dice_coefficient, dice_coefficient_boundary, precision, precision_boundary, recall, recall_boundary
 
-def visualize(**images):
-    """
-    Plot images in one row
-    """
-    n_images = len(images)
-    plt.figure(figsize=(20,8))
-    for idx, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n_images, idx + 1)
-        plt.xticks([]); 
-        plt.yticks([])
-        # get title from the parameter names
-        plt.title(name.replace('_',' ').title(), fontsize=20)
-        plt.imshow(image)
-    plt.show()
-
-def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
+def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, lr_scheduler):
     logs = {metric_name: [] for metric_name in metrics.keys()}
     logs['loss'] = []
 
@@ -51,7 +37,7 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
 
         with torch.set_grad_enabled(mode == 'train'): # gradient calculation only in train mode
             outputs = model(inputs)
-            loss = loss_fn(outputs.float(), target.float(), edges)
+            loss = loss_fn(outputs.float(), target.float())
 
             for metric_name, metric_fn in metrics.items():
                 metric_value = metric_fn(outputs, target, edges).cpu().item()
@@ -62,9 +48,10 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode):
             if mode == 'train':
                 loss.backward()
                 optimizer.step()
-    logs = {metric_name: np.mean(metric_values) for metric_name, metric_values in logs.items()}
+                lr_scheduler.step()
+    
+    logs = {metric_name: metric_values for metric_name, metric_values in logs.items()}
     return logs
-
 
 def main(args):
     
@@ -96,20 +83,23 @@ def main(args):
         size_coefficient = args.dataset_coeff
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=10)
-    valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size_train, shuffle=True, num_workers=10)
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size_val, shuffle=False, num_workers=4)
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     metrics = {
+        "iou": IoU,
+        "iou_b": IoU_b,
         "dice": dice_coefficient,
         "dice_b": dice_coefficient_boundary,
         "precision": precision,
+        "precision_b": precision_boundary,
         "recall": recall,
+        "recall_b": recall_boundary
     }
 
-    checkpoint_metric = 'precision'
-
+    checkpoint_metric = 'loss'
 
     if args.checkpoint_path:
         model = torch.load(args.checkpoint_path)
@@ -117,19 +107,28 @@ def main(args):
         model = createDeepLabv3Plus(1)
     model.to(device)
 
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.0001)
-    loss = FVLoss()
-    
+    num_epochs = 30
 
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.0001) # factor of 10 lower when I am funetuning
+    lr_schedulre = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs)
+    loss = DistanceWeightBCELoss() # FVLoss(alpha=10)
+    
     best_val_score = float('inf')
     train_logs, valid_logs = [], []
 
-    num_epochs = 30
+    desc = f'FV: {run_name} \n \
+         Model: {args.model} \n \
+         Checkpoint: {args.checkpoint_path} \n \
+         Dataset: {args.dataset_coeff:.2f} \n \
+         Batch size: {args.batch_size_train} \n \
+         Loss: {loss} \n \n'
+    
+    logging.info(desc)
 
     for epoch in range(1, num_epochs+1):
         logging.info(f'Epoch {epoch}/{num_epochs}.')
-        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train')
-        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid')
+        train_log = run_epoch(model, device, loss, train_loader, optimizer, metrics, 'train', lr_schedulre)
+        valid_log = run_epoch(model, device, loss, valid_loader, optimizer, metrics, 'valid', lr_schedulre)
 
         train_logs.append(train_log)
         valid_logs.append(valid_log)
@@ -152,10 +151,13 @@ if __name__ == '__main__':
     parser.add_argument("--model", type=str,  choices={'Deeplabv3+'}, default='Deeplabv3')
     parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
-    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/run_230418-183542/checkpoints/Deeplabv3_err:0.850_ep:8.pth')
+    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/run_230416-170910/checkpoints/Deeplabv3_err:0.193_ep:12.pth')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--dataset_coeff", type=float, default=1/20)
+    parser.add_argument("--dataset_coeff", type=float, default=1/300)
+    parser.add_argument("--batch_size_train", type=int, default=20)
+    parser.add_argument("--batch_size_val", type=int, default=6)
+
     args = parser.parse_args()
 
     main(args)

@@ -3,6 +3,7 @@ api-keys.json
 
 # temporary files
 test.ipynb
+test.py
 *.tmp
 __pycache__
 trn.log
