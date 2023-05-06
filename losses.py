@@ -19,6 +19,9 @@ class BinaryDiceLoss(nn.Module):
         self.smooth = smooth
         self.reduction = reduction
 
+    def __str__(self):
+        return f"BinaryDiceLoss(smooth={self.smooth}, reduction={self.reduction})"
+
     def forward(self, predict, target):
         assert predict.shape[0] == target.shape[0], "batch sizes don't match"
 
@@ -52,6 +55,9 @@ class IOULoss(nn.Module):
         super(IOULoss, self).__init__()
         self.smooth = smooth
         self.reduction = reduction
+    
+    def __str__(self):
+        return f"IOULoss(smooth={self.smooth}, reduction={self.reduction})"
 
     def forward(self, predict, target):
         assert predict.shape[0] == target.shape[0], "batch sizes don't match"
@@ -90,6 +96,9 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
+    
+    def __str__(self):
+        return "FocalLoss(alpha={}, gamma={})".format(self.alpha, self.gamma)
         
     def forward(self, predict, targets):
         BCE_loss = F.binary_cross_entropy(predict, targets, reduction='none')
@@ -113,6 +122,9 @@ class BoundaryLoss(nn.Module):
         super().__init__()
         self.theta0 = theta0
         self.theta = theta
+    
+    def __str__(self):
+        return "BoundaryLoss(theta0={}, theta={})".format(self.theta0, self.theta)
 
     def forward(self, predict, targets):
         """
@@ -230,16 +242,17 @@ class DistanceWeightBCELoss(nn.Module):
             return loss 
 
 
-
-class FVLoss(nn.Module):
-    def __init__(self, alpha=2):
+class CombLoss(nn.Module):
+    def __init__(self, alpha=0.6):
+        # check for the same magnitute of loss values
         super().__init__()
-        self.BDC = BinaryDiceLoss()
-        self.FL = FocalLoss()
-        self.BL = BoundaryLoss()
+        self.AreaLoss = nn.BCELoss(reduction='none') #FocalLoss()
+        self.BoundaryLoss = BoundaryLoss()
         self.alpha = alpha
+
+    def __str__(self):
+        return "CombLoss(alpha={}) : alpha*{} + (1-alpha)*{}".format(self.alpha, self.BoundaryLoss, self.AreaLoss)
     
     def forward(self, predict, targets):
-        #w_predict = predict*boundaries
-        return self.BL(predict, targets)*self.alpha + self.FL(predict, targets)
+        return self.BoundaryLoss(predict, targets)*self.alpha + (1-self.alpha)*self.AreaLoss(predict, targets)
 

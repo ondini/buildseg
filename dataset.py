@@ -45,29 +45,28 @@ class FVDataset(torch.utils.data.Dataset):
     def __len__(self):
         return int(len(self.image_fns)*self.coefficient)
     
-    def transform(self, image, label, label_border):
-        image, label, label_border = T.ToTensor()(image), T.ToTensor()(label), T.ToTensor()(label_border)
+    def transform(self, image, label):
+        # image = T.TrivialAugmentWide()(image)
+        image, label = T.ToTensor()(image), T.ToTensor()(label)
         if self.augmentation:
             k = random.randint(0, 3)
-            image, label, label_border  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2)), torch.rot90(label_border, k=k, dims=(1, 2))
+            image, label  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2))
         
-        return image, label, label_border
+        return image, label
         
 
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
         label_file_path = os.path.join(self.labels_path, self.label_fns[i])
 
-        image = np.array(Image.open(image_file_path)) # cv2.cvtColor(cv2.imread(image_file_path), cv2.COLOR_BGR2RGB)
+        image = np.array(T.TrivialAugmentWide()(Image.open(image_file_path))) # cv2.cvtColor(cv2.imread(image_file_path), cv2.COLOR_BGR2RGB)
         labelI = Image.open(label_file_path)
         label = np.array(labelI).astype('float') # cv2.imread(mask_file_path, cv2.IMREAD_GRAYSCALE))
-        label_border = np.array(labelI.filter(ImageFilter.FIND_EDGES)).astype(bool).astype('float')
 
-        image, label, label_border = self.transform(image, label, label_border)
+        image, label = self.transform(image, label)
         
         if self.num_classes > 2:
             label = one_hot(label, self.num_classes)
-            label_border = one_hot(label_border, self.num_classes)
-        
-        return image, label, label_border
+
+        return image, label
         
