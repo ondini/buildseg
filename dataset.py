@@ -52,11 +52,13 @@ class FVDataset(torch.utils.data.Dataset):
         return int(len(self.image_fns)*self.coefficient)
     
     def transform(self, imageI, label):
-        imageI = T.TrivialAugmentWide()(imageI)
+        if self.augmentation:
+            imageI = T.TrivialAugmentWide()(imageI)
         image, label = T.ToTensor()(imageI), T.ToTensor()(label)
         if self.augmentation:
             k = random.randint(0, 3)
             image, label  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2))
+            
         
         return image, label
         
@@ -69,8 +71,7 @@ class FVDataset(torch.utils.data.Dataset):
         labelI = Image.open(label_file_path)
         label = np.array(labelI).astype('float') # float to make torch.Tensor map it to 1
 
-        if self.augmentation:
-            image, label = self.transform(imageI, label)
+        image, label = self.transform(imageI, label)
         
         if self.num_classes > 2:
             label = one_hot(label, self.num_classes)
