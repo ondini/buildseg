@@ -7,10 +7,16 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 frame_size = 640
-img_ratio = 0.075/0.1 # resolutions of given dataset and Google - (156543.03392 * math.cos(math.radians(lat))) / (2 ** zoom)
+img_ratio = 0.3/0.1 #0.075/0.1 # resolutions of given dataset and Google - (156543.03392 * math.cos(math.radians(lat))) / (2 ** zoom)
 
-input_dir = '/home/kafkaon1/FVAPP/data/NZ/val'
-output_dir = '/home/kafkaon1/FVAPP/data/FV/val'
+# NZ
+# input_dir = '/home/kafkaon1/FVAPP/data/NZ/val'
+# output_dir = '/home/kafkaon1/FVAPP/data/FV/val'
+
+# INRIA
+input_dir = '/home/kafkaon1/FVAPP/data/INRIA/AerialImageDataset/train'
+output_dir = '/home/kafkaon1/FVAPP/data/FV/train2'
+
 
 imgs_path = os.path.join(input_dir, 'image')
 labels_path = os.path.join(input_dir, 'label')
