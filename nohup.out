@@ -1,0 +1,24 @@
+usage: FVApp training script [-h] [--model {Deeplabv3+}] [--loss {BinaryDice}]
+                             [--num_epochs NUM_EPOCHS]
+                             [--device {cpu,cuda:1,cuda:0}]
+                             [--checkpoint_path CHECKPOINT_PATH]
+                             [--out_path OUT_PATH]
+                             [--dataset_path DATASET_PATH]
+                             [--dataset_coeff DATASET_COEFF]
+                             [--batch_size_train BATCH_SIZE_TRAIN]
+                             [--batch_size_val BATCH_SIZE_VAL]
+                             [--scheduler SCHEDULER]
+                             [--freeze {encDec,encDecAspp,none,enc}]
+FVApp training script: error: unrecognized arguments: --frn.log
+Traceback (most recent call last):
+  File "train.py", line 177, in <module>
+    train(args)
+  File "train.py", line 84, in train
+    model = torch.load(args.checkpoint_path)
+  File "/home/kafkaon1/miniconda3/envs/mlenv/lib/python3.6/site-packages/torch/serialization.py", line 607, in load
+    return _load(opened_zipfile, map_location, pickle_module, **pickle_load_args)
+  File "/home/kafkaon1/miniconda3/envs/mlenv/lib/python3.6/site-packages/torch/serialization.py", line 882, in _load
+    result = unpickler.load()
+  File "/home/kafkaon1/miniconda3/envs/mlenv/lib/python3.6/site-packages/torch/_utils.py", line 217, in _rebuild_parameter
+    def _rebuild_parameter(data, requires_grad, backward_hooks):
+KeyboardInterrupt

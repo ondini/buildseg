@@ -213,5 +213,5 @@ def _matthews_correlation_coefficient(prediction, targets):
     
     # Calculate the Matthews correlation coefficient for each image in the batch
     mcc = (true_positives * true_negatives - false_positives * false_negatives) / (
-        (true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives) + 1e-8)
+        torch.sqrt((true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives) + 1e-8))
     return mcc

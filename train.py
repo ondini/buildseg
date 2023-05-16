@@ -1,14 +1,7 @@
 import os
-import random
 import datetime
 import argparse
 import logging
-import logging
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-# torch optim LR scheduler - one cycle LR 
 
 import torch
 from torch.utils.data import DataLoader
@@ -43,10 +36,11 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, lr_s
                 # gradient clipping - to avoid exploding gradients 
                 # test the clipping threshold in log scale
                 # compute average gradient norm and log it
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
 
                 optimizer.step()
-                #lr_scheduler.step()
+                if lr_scheduler:
+                    lr_scheduler.step()
     
 def train(args):
     
@@ -92,11 +86,20 @@ def train(args):
         model = createDeepLabv3Plus(1)
     model.to(device)
 
+    if args.freeze != 'none':
+        for name, param in model.named_parameters():
+            if name.startswith('encoder'):
+                param.requires_grad = False
+            if name.startswith('decoder.aspp') and args.freeze.startswith('encDec'):
+                param.requires_grad = False
+            if name.startswith('decoder.block') and args.freeze == 'encDec':
+                param.requires_grad = False
+
     num_epochs = args.num_epochs
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.00001) # factor of 10 lower when I am funetuning
-    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs)
-    loss = DistanceWeightBCELoss(alpha=0.8) #CombLoss(alpha=0.7) 
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs) if args.scheduler else None
+    loss = CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
 
 
     metric_names = ["iou", "dice", "precision", "recall", "matthews"]
@@ -124,8 +127,9 @@ def train(args):
          Loss: {loss} \n \
          Epochs: {num_epochs} \n \
          Optimizer: {optimizer} \n \
-         Scheduler: {lr_scheduler} \n \n'
-
+         Scheduler: {lr_scheduler} \n \
+         Frozen: {args.freeze} \n \n'
+         
          # log also the learning rate and if scheduler is used
     
     logging.info(desc)
@@ -159,12 +163,14 @@ if __name__ == '__main__':
     parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
     parser.add_argument("--num_epochs", type=int,  default=30)
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
-    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
+    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/train/run_230504-140353/checkpoints/Deeplabv3_err:0.118_ep:9.pth') #/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/train')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--dataset_coeff", type=float, default=1/200)
+    parser.add_argument("--dataset_coeff", type=float, default=1/20)
     parser.add_argument("--batch_size_train", type=int, default=20)
     parser.add_argument("--batch_size_val", type=int, default=8)
+    parser.add_argument("--scheduler", type=bool, default=True)
+    parser.add_argument("--freeze", type=str, choices={'none', 'enc', 'encDec','encDecAspp'}, default='none')
 
     args = parser.parse_args()
 

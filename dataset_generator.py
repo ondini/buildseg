@@ -14,7 +14,7 @@ img_ratio = 0.3/0.1 #0.075/0.1 # resolutions of given dataset and Google - (1565
 # output_dir = '/home/kafkaon1/FVAPP/data/FV/val'
 
 # INRIA
-input_dir = '/home/kafkaon1/FVAPP/data/INRIA/AerialImageDataset/train'
+input_dir = '/home/kafkaon1/FVAPP/data/INRIA/AerialImageDataset/val'
 output_dir = '/home/kafkaon1/FVAPP/data/FV/train2'
 
 

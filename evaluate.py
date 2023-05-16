@@ -1,73 +1,52 @@
+import os
+import datetime
 import argparse
+import logging
+from tqdm import tqdm
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from sklearn.metrics import classification_report
 import torch
 from torch.utils.data import DataLoader
-from os import makedirs
-from sklearn.metrics import classification_report
-from tqdm import tqdm
-import pathlib
-from matplotlib import pyplot as plt
-import logging
-from yaml import load, CLoader as Loader
 
-from infrastructure import Experiment, load_yaml
-import experiments # otherwise experiments will not be known
-import datetime
-import os
+from models import createDeepLabv3, createDeepLabv3Plus
 from dataset import FVDataset
+from metrics import GetMetricFunction, Metrics
 
 def evaluate(args):
     start = datetime.datetime.now()
     run_name = f"run_{start:%y%m%d-%H%M%S}"
-    out_log_path = os.path.join(args.out_path, run_name+'/logs/')
+    out_path = os.path.join(args.out_path, run_name)
 
-    os.makedirs(out_log_path)
+    os.makedirs(out_path)
 
     val_data_path = os.path.join(args.dataset_path, 'val/image_resized')
     val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
     val_list_path = os.path.join(args.dataset_path, 'val.txt')
 
-    # Configure the logger
-    logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=logging.INFO)
+    logging.basicConfig(filename=os.path.join(out_path, 'logging.log'), level=logging.INFO)
 
     valid_dataset = FVDataset(
         val_data_path, val_label_path, val_list_path,
         augmentation=False,
+        size_coefficient=1/1000
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size_val, shuffle=False, num_workers=4, persistent_workers=True)
+
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, persistent_workers=True)
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
-    metrics = {
-        "iou": IoU,
-        "iou_b": IoU_b,
-        "dice": dice_coefficient,
-        "dice_b": dice_coefficient_boundary,
-        "precision": precision,
-        "precision_b": precision_boundary,
-        "recall": recall,
-        "recall_b": recall_boundary
-    }
+    model = torch.load(args.ckpt_path)
 
-    checkpoint_metric = 'loss'
-
-    if args.checkpoint_path:
-        model = torch.load(args.checkpoint_path)
-    else:
-        model = createDeepLabv3Plus(1)
     model.to(device)
     model.eval()
 
-    train_logs, valid_logs = [], []
-
     desc = f'FV: {run_name} \n \
-         Model: {args.model} \n \
-         Checkpoint: {args.checkpoint_path} \n \
-         Dataset: {args.dataset_coeff:.2f} \n \
-         Batch size: {args.batch_size_train} \n \
-         Loss: {loss} \n \n'
+         Checkpoint: {args.ckpt_path} \n \
+         Batch size: {args.batch_size} \n \n'
 
-         # log also the learning rate and if scheduler is used
-    
     logging.info(desc)
 
     y_true, y_pred = [], []
@@ -80,31 +59,44 @@ def evaluate(args):
         y_true.append(targets.cpu())
         y_pred.append(predictions.cpu())
     
-    y_true, y_pred = torch.hstack(y_true), torch.hstack(y_pred)
+    y_true, y_pred = torch.concat(y_true,0), torch.concat(y_pred, 0)
 
+    metric_names = ["iou", "dice", "precision", "recall", "matthews"]
+    metrics = {
+        metric_name : GetMetricFunction(metric_name) for metric_name in metric_names
+    } 
+    metrics.update( {
+        f"{metric_name}_b{1}" : GetMetricFunction(metric_name, 1) for metric_name in metric_names
+    })
+    metrics.update({
+        f"{metric_name}_b{3}" : GetMetricFunction(metric_name, 1) for metric_name in metric_names
+    } )
+    metrics.update({
+        f"{metric_name}_b{5}" : GetMetricFunction(metric_name, 1) for metric_name in metric_names
+    } )
 
+    results = {}
+    for metric_name, metric in metrics.items():
+        res = metric(y_true, y_pred)
+        logging.info(f'{metric_name}: {res.mean()}')
+        results[metric_name] = res
+      
+      
+    np.save(os.path.join(out_path,"results.npy"), results)
 
+    # with open(os.path.join(out_path,"eval-report.txt"), "w") as fout:
+    #     fout.write(classification_report(y_true.cpu().numpy(), y_pred.cpu().numpy()))
 
-    makedirs(args["output"], exist_ok=True)
-    with open(args["output"] / "eval-report.txt", "w") as fout:
-        # TODO: Write your code here
-        fout.write(classification_report(y_true.cpu().numpy(), y_pred.cpu().numpy()))
-    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FVApp evaluation script')
+    parser.add_argument("--ckpt_path", type=str, default='/home/kafkaon1/FVAPP/out/train/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
+    parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:1')
+    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/eval')
+    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
+    parser.add_argument("--batch_size", type=int, default=10)
+    parser.add_argument('--raw', action="store_true", default=False)
 
-    parser.add_argument('-i', '--input',type=pathlib.Path, required=True, help='input config')
-    parser.add_argument('--dataset',type=str, default="test", help='which dataset to evalute')
-    parser.add_argument('--ckpt',type=pathlib.Path, required=True, help='checkpoint path')
-    parser.add_argument('--output',type=pathlib.Path, required=True, help='eval output path')
-    parser.add_argument('--batchsize',type=int, default=32, help='batchsize')
-    parser.add_argument('--device',type=str, default="cpu", help='device')
-    parser.add_argument('--raw', action="store_true", default=False, help='plot raw unsmoothed data only')
-    parser.add_argument('--num-dl-workers',type=int, default=1, help='num dataloader workers (converting images on the fly)')
-
-    logging.basicConfig(level=logging.INFO, format='[%(asctime)s | %(levelname)s | %(filename)s:%(lineno)d ] %(message)s')
-    
     args = parser.parse_args()
 
     evaluate(args)

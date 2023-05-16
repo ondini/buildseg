@@ -78,7 +78,6 @@ class IOULoss(nn.Module):
         else:
             return loss
 
-
 class FocalLoss(nn.Module):
     """ Focal loss - BCE with balancing
     # Args
@@ -110,7 +109,6 @@ class FocalLoss(nn.Module):
             return F_loss.sum()
         else:
             return F_loss
-
 
 class BoundaryLoss(nn.Module):
     """Boundary Loss proposed in:
@@ -206,6 +204,35 @@ class DistanceLoss(nn.Module):
         loss = torch.mean(torch.sum(fp + fn*4 , dim=2))
         return loss
 
+class TverskyLoss(nn.Module):
+    def __init__(self, smooth=1, alpha=1, beta=1, reduction='mean'):
+        super(TverskyLoss, self).__init__()
+        self.smooth = smooth
+        self.alpha = alpha
+        self.beta = beta
+        self.reduction = reduction
+
+    def forward(self, predict, target):
+        assert predict.shape[0] == target.shape[0], "batch sizes don't match"
+
+        predict = predict.view(predict.shape[0], -1)
+        target = target.view(target.shape[0], -1)
+
+        TP = (predict * target).sum(dim=1)    
+        FP = ((1-target) * predict).sum(dim=1) 
+        FN = (target * (1-predict)).sum(dim=1) 
+       
+        Tversky = (TP + self.smooth) / (TP + self.alpha*FP + self.beta*FN + self.smooth)  
+        
+        loss = 1 - Tversky
+
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()   
+        else:
+            return loss
+
 class DistanceWeightBCELoss(nn.Module):
     def __init__(self, reduction='mean', alpha=1, theta0=3, theta=9):
         super().__init__()
@@ -241,12 +268,11 @@ class DistanceWeightBCELoss(nn.Module):
         else:
             return loss 
 
-
 class CombLoss(nn.Module):
     def __init__(self, alpha=0.6):
         # check for the same magnitute of loss values
         super().__init__()
-        self.AreaLoss = nn.BCELoss(reduction='none') #FocalLoss()
+        self.AreaLoss = BinaryDiceLoss() #nn.BCELoss(reduction='none') #FocalLoss()
         self.BoundaryLoss = BoundaryLoss()
         self.alpha = alpha
 

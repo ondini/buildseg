@@ -37,8 +37,9 @@ class FVDataset(torch.utils.data.Dataset):
 
         if names_path != '':
             with open(names_path, 'r') as f:
-                self.image_fns = [image_fn.strip() for image_fn in f.readlines()]
-                self.label_fns = [label_fn.strip() for label_fn in f.readlines()]
+                lns = f.readlines()
+                self.image_fns = [image_fn.strip() for image_fn in lns]
+                self.label_fns = [label_fn.strip() for label_fn in lns]
         else:
             self.image_fns = [image_fn for image_fn in sorted(os.listdir(images_path))]
             self.label_fns = [label_fn for label_fn in sorted(os.listdir(images_path))]
@@ -59,7 +60,6 @@ class FVDataset(torch.utils.data.Dataset):
             k = random.randint(0, 3)
             image, label  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2))
             
-        
         return image, label
         
 
