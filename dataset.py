@@ -62,7 +62,6 @@ class FVDataset(torch.utils.data.Dataset):
             
         return image, label
         
-
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
         label_file_path = os.path.join(self.labels_path, self.label_fns[i])

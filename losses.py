@@ -188,8 +188,7 @@ class DistanceLoss(nn.Module):
         p = (self.theta - 1) // 2
         t_p = F.pad(targets, (p, p, p, p), mode='constant', value=0)  
 
-        gt_d = F.conv2d(
-                    1-t_p, torch.ones([1,1,self.theta,self.theta]).to(self.device), stride=1)
+        gt_d = F.conv2d(1-t_p, torch.ones([1,1,self.theta,self.theta]).to(self.device), stride=1)
 
         gt_d *= 1-targets
 
@@ -272,7 +271,7 @@ class CombLoss(nn.Module):
     def __init__(self, alpha=0.6):
         # check for the same magnitute of loss values
         super().__init__()
-        self.AreaLoss = BinaryDiceLoss() #nn.BCELoss(reduction='none') #FocalLoss()
+        self.AreaLoss = IOULoss() #BinaryDiceLoss() #nn.BCELoss(reduction='none') #FocalLoss()
         self.BoundaryLoss = BoundaryLoss()
         self.alpha = alpha
 

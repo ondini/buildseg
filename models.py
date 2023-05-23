@@ -37,3 +37,4 @@ def createDeepLabv3Plus(outputchannels):
         activation='sigmoid',
     )
     return model
+
