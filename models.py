@@ -6,7 +6,7 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 
 import sys
-sys.path.append("./third_party")
+sys.path.append("/home/kafkaon1/FVAPP/third_party")
 from projectRegularization import GeneratorResNet,Encoder, regularization
 
 def createDeepLabv3(outputchannels):
@@ -53,18 +53,43 @@ class DLV3Reg(nn.Module):
 
         self.encReg = Encoder()
         self.genReg = GeneratorResNet()
-        self.genReg.load_state_dict(torch.load(generator))
-        self.encReg.load_state_dict(torch.load(encoder))
+        self.genReg.load_state_dict(torch.load(generator))#, map_location=torch.device('cuda')))
+        self.encReg.load_state_dict(torch.load(encoder))# , map_location=torch.device('cuda')))
 
     def forward(self, input):
         seg = self.modelSeg(input)
         print(type(seg.type(torch.uint8)))
 
         reg = []
-        for i in range(len(seg.shape[0])):
-            seg_i = seg[i,0,:,:].detach()
-            in_i = input[i,:,:,:].detach()
+        for i in range(seg.shape[0]):
+            seg_i = seg[i,0,:,:].detach().cpu().numpy()
+            in_i = input[i,:,:,:].detach().cpu().permute(1,2,0).numpy()
             reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
-            reg.append(reg_i)
-            
-        return reg
+            reg.append(torch.tensor(reg_i.astype(np.uint8)))
+
+        return torch.stack(reg)
+    
+import torchvision.transforms as T
+from PIL import Image
+import numpy as np
+import cv2
+
+
+if __name__ == "__main__":
+    img_path = '/home/kafkaon1/FVAPP/data/FV/train/image_resized/christchurch_450_478.png' #  '/home/kafkaon1/tmp_sataa.jpg'
+    label_path = '/home/kafkaon1/FVAPP/data/FV/train/label_resized/christchurch_450_478.png'
+    im = Image.open(img_path)
+    la = np.array(Image.open(label_path)).astype(float)
+
+    I = T.ToTensor()(im).to('cuda')#cv2.imread(img_path))
+    l = T.ToTensor()(la)
+    I = I.unsqueeze(0)
+    l = l.unsqueeze(0)
+
+    model = DLV3Reg('/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23320_ep:25.pth')
+    model.eval()
+    
+    Ia = torch.vstack((I, I))
+    outta = model(Ia)
+
+    print(outta)
