@@ -271,7 +271,7 @@ class CombLoss(nn.Module):
     def __init__(self, alpha=0.6):
         # check for the same magnitute of loss values
         super().__init__()
-        self.AreaLoss = IOULoss() #BinaryDiceLoss() #nn.BCELoss(reduction='none') #FocalLoss()
+        self.AreaLoss = BinaryDiceLoss() #BinaryDiceLoss() #nn.BCELoss(reduction='none') #FocalLoss()
         self.BoundaryLoss = BoundaryLoss()
         self.alpha = alpha
 
