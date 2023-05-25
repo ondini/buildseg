@@ -1,9 +1,9 @@
-model_weights = {
-    'bl_bce_a084': '/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23119_ep:29.pth',
-    'bl_bce_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.15889_ep:28.pth',
+model_weightss = {
+    'wbce_a08': '/home/kafkaon1/FVAPP/out/train/run_230507-230929/checkpoints/Deeplabv3_err:0.04721_ep:15.pth',
+    'bdc': '/home/kafkaon1/FVAPP/out/train/run_230508-224653/checkpoints/Deeplabv3_err:0.06075_ep:30.pth',
 }
 
-model_weights2 = {
+model_weights = {
     'wbce_a08': '/home/kafkaon1/FVAPP/out/train/run_230507-230929/checkpoints/Deeplabv3_err:0.04721_ep:15.pth',
     'bdc': '/home/kafkaon1/FVAPP/out/train/run_230508-224653/checkpoints/Deeplabv3_err:0.06075_ep:30.pth',
     'foc': '/home/kafkaon1/FVAPP/out/train/run_230510-093710/checkpoints/Deeplabv3_err:0.01155_ep:18.pth',

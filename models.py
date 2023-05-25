@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 
 import segmentation_models_pytorch as smp
+import cv2
+import numpy as np
 
 import sys
 sys.path.append("/home/kafkaon1/FVAPP/third_party")
@@ -55,7 +57,8 @@ class DLV3Reg(nn.Module):
                  sam = '/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth',
                  sam_type = 'vit_h',
                  do_sam = False,
-                 do_reg = True):
+                 do_reg = True,
+                 do_poly = False):
         super(DLV3Reg, self).__init__()
         self.modelSeg = torch.load(segmentator)
 
@@ -71,11 +74,14 @@ class DLV3Reg(nn.Module):
             sam = sam_model_registry["vit_h"](checkpoint="/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth")
             sam.to('cuda:1')
             self.samPred = SamPredictor(sam) 
+        
+        self.do_poly = do_poly
 
     def forward(self, input):
         seg = self.modelSeg(input)
-        print(type(seg.type(torch.uint8)))
 
+        if not self.do_reg and not self.do_sam:
+            return seg
         reg = []
         for i in range(seg.shape[0]):
             seg_i = seg[i,0,:,:].detach().cpu().numpy()
@@ -94,8 +100,13 @@ class DLV3Reg(nn.Module):
                 seg_i = masks.sum(axis=(0))[0].detach().cpu().numpy()
 
             reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
-            reg.append(torch.tensor(reg_i.astype(np.uint8)))
 
+            if self.do_poly is not None:
+                polygons = extractPolygons(seg_i)
+                reg_i = labelFromPolygons(polygons, in_i.shape[:2])
+            
+            reg.append(torch.tensor(reg_i.astype(np.uint8)))
+                
         return torch.stack(reg)
     
     def getBBxs(self, ins_segmentation):
@@ -120,34 +131,28 @@ class DLV3Reg(nn.Module):
         bbxs = torch.tensor(bbxs, device=self.samPred.device)   
         return bbxs
     
-import torchvision.transforms as T
-from PIL import Image
-import numpy as np
-import cv2
 
 def extractPolygons(segmentation, eps =  0.01):
     segmentation = np.uint16(measure.label(segmentation, background=0))
 
     max_instance = np.amax(segmentation)
-    min_size=10
+    min_size=500
 
     polygons = []
     for ins in range(1, max_instance+1):
         shape_mask = np.uint8(segmentation == ins)
 
         if shape_mask.sum() > min_size:
-            #contours, _ = cv2.findContours(output_filtered, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             contours, _ = cv2.findContours(shape_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            # cnt = contours[0]
             largest_contour = max(contours, key=cv2.contourArea)
             epsilon = eps * cv2.arcLength(largest_contour, True)
 
             approx_polygon = cv2.approxPolyDP(largest_contour, epsilon, True)
 
-            # Extract the vertices of the polygon
             vertices = [tuple(vertex[0]) for vertex in approx_polygon]
             polygons.append(vertices)
+
     return polygons
 
 def labelFromPolygons(polygons, shape):
@@ -155,6 +160,10 @@ def labelFromPolygons(polygons, shape):
     for poly in polygons:
         cv2.fillPoly(label, [np.array(poly)], 1)
     return label
+
+
+import torchvision.transforms as T
+from PIL import Image
 
 if __name__ == "__main__":
     img_path = '/home/kafkaon1/FVAPP/data/FV/train/image_resized/christchurch_450_478.png' #  '/home/kafkaon1/tmp_sataa.jpg'
