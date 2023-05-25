@@ -54,7 +54,7 @@ class DLV3Reg(nn.Module):
                  encoder='/home/kafkaon1/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',
                  sam = '/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth',
                  sam_type = 'vit_h',
-                 do_sam = True,
+                 do_sam = False,
                  do_reg = True):
         super(DLV3Reg, self).__init__()
         self.modelSeg = torch.load(segmentator)
@@ -125,6 +125,36 @@ from PIL import Image
 import numpy as np
 import cv2
 
+def extractPolygons(segmentation, eps =  0.01):
+    segmentation = np.uint16(measure.label(segmentation, background=0))
+
+    max_instance = np.amax(segmentation)
+    min_size=10
+
+    polygons = []
+    for ins in range(1, max_instance+1):
+        shape_mask = np.uint8(segmentation == ins)
+
+        if shape_mask.sum() > min_size:
+            #contours, _ = cv2.findContours(output_filtered, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(shape_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # cnt = contours[0]
+            largest_contour = max(contours, key=cv2.contourArea)
+            epsilon = eps * cv2.arcLength(largest_contour, True)
+
+            approx_polygon = cv2.approxPolyDP(largest_contour, epsilon, True)
+
+            # Extract the vertices of the polygon
+            vertices = [tuple(vertex[0]) for vertex in approx_polygon]
+            polygons.append(vertices)
+    return polygons
+
+def labelFromPolygons(polygons, shape):
+    label = np.zeros(shape, dtype=np.uint8)
+    for poly in polygons:
+        cv2.fillPoly(label, [np.array(poly)], 1)
+    return label
 
 if __name__ == "__main__":
     img_path = '/home/kafkaon1/FVAPP/data/FV/train/image_resized/christchurch_450_478.png' #  '/home/kafkaon1/tmp_sataa.jpg'
@@ -143,5 +173,7 @@ if __name__ == "__main__":
     
     Ia = torch.vstack((I, I)).to('cuda:1')
     outta = model(Ia)
+
+    polygons = extractPolygons(outta[0].numpy(),0.0038)
 
     print(outta)

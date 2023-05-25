@@ -1,5 +1,6 @@
 model_weights = {
-    'bl_bce_a084': '/home/kafkaon1/FVAPP/out/train/run_230517-134445/checkpoints/Deeplabv3_err:0.01578_ep:17.pth'
+    'bl_bce_a084': '/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23119_ep:29.pth',
+    'bl_bce_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.15889_ep:28.pth',
 }
 
 model_weights2 = {
@@ -13,6 +14,8 @@ model_weights2 = {
     'bce': '/home/kafkaon1/FVAPP/out/train/run_230516-175052/checkpoints/Deeplabv3_err:0.05070_ep:21.pth',
     'bce_enc': '/home/kafkaon1/FVAPP/out/train/run_230516-183515/checkpoints/Deeplabv3_err:0.04982_ep:25.pth',
     'wbce_a02_enc': '/home/kafkaon1/FVAPP/out/train/run_230517-134445/checkpoints/Deeplabv3_err:0.01578_ep:17.pth',
+    'bl_bce_a084': '/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23119_ep:29.pth',
+    'bl_bce_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.15889_ep:28.pth',
 }
 
 if __name__ == '__main__':

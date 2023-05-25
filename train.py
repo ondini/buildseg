@@ -100,7 +100,7 @@ def train(args):
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.00001) # factor of 10 lower when I am funetuning
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs) if args.scheduler else None
-    loss = CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
+    loss = DistanceWeightBCELoss(alpha=0.1, theta=3) #CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
 
     metric_names = ["iou", "dice", "precision", "recall", "matthews"]
     metrics = {

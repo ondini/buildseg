@@ -96,7 +96,6 @@ def evaluate(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FVApp evaluation script')
-    parser.add_argument("--ckpt_path", type=str) #default='/home/kafkaon1/FVAPP/out/train/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:1')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/eval')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
