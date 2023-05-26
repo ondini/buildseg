@@ -106,15 +106,15 @@ def evaluate(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='FVApp evaluation script')
-    parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:1')
+    parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/eval')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--use_reg", type=bool, default=True)
+    parser.add_argument("--batch_size", type=int, default=10)
+    parser.add_argument("--use_reg", type=bool, default=False)
     parser.add_argument("--use_sam", type=bool, default=False)
     parser.add_argument("--hard_pred", type=bool, default=False)
     parser.add_argument("--get_poly", type=bool, default=True)
-    parser.add_argument("--dataset_coefficient", type=float, default=1/10)
+    parser.add_argument("--dataset_coefficient", type=float, default=1/50)
 
     args = parser.parse_args()
 

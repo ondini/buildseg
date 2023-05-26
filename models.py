@@ -58,21 +58,25 @@ class DLV3Reg(nn.Module):
                  sam_type = 'vit_h',
                  do_sam = False,
                  do_reg = True,
-                 do_poly = False):
+                 do_poly = False,
+                 device = 'cuda:0'):
         super(DLV3Reg, self).__init__()
         self.modelSeg = torch.load(segmentator)
+        self.modelSeg.to(device)
 
         self.do_reg = do_reg
         if self.do_reg:
             self.encReg = Encoder()
             self.genReg = GeneratorResNet()
-            self.genReg.load_state_dict(torch.load(generator))#, map_location=torch.device('cuda')))
-            self.encReg.load_state_dict(torch.load(encoder))# , map_location=torch.device('cuda')))
+            self.genReg.load_state_dict(torch.load(generator, map_location=torch.device('cuda:0')))
+            self.encReg.load_state_dict(torch.load(encoder , map_location=torch.device('cuda:0')))
+            self.encReg.to(device)
+            self.genReg.to(device)
         
         self.do_sam = do_sam
         if self.do_sam:
             sam = sam_model_registry["vit_h"](checkpoint="/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth")
-            sam.to('cuda:1')
+            sam.to(device)
             self.samPred = SamPredictor(sam) 
         
         self.do_poly = do_poly
@@ -80,7 +84,7 @@ class DLV3Reg(nn.Module):
     def predict(self, input):
         seg = (self.modelSeg(input) > 0.5).float()
 
-        if not self.do_reg and not self.do_sam:
+        if not self.do_reg and not self.do_sam and not self.do_poly:
             return seg
         reg = []
         for i in range(seg.shape[0]):
@@ -99,10 +103,13 @@ class DLV3Reg(nn.Module):
                 )
                 seg_i = masks.sum(axis=(0))[0].detach().cpu().numpy()
 
-            reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
+            if self.do_reg:
+                reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
+            else:
+                reg_i = seg_i
 
             if self.do_poly:
-                polygons = extractPolygons(reg_i, 0.0038)
+                polygons = extractPolygons(reg_i, 0.005)
                 reg_i = labelFromPolygons(polygons, in_i.shape[:2])
             
             reg.append(torch.tensor(reg_i.astype(np.uint8)))
@@ -176,13 +183,12 @@ if __name__ == "__main__":
     I = I.unsqueeze(0)
     l = l.unsqueeze(0)
 
-    model = DLV3Reg('/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23320_ep:25.pth')
+    model = DLV3Reg('/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23320_ep:25.pth', do_reg=False, do_poly=True)
     model.eval()
     model.to('cuda:1')
     
     Ia = torch.vstack((I, I)).to('cuda:1')
-    outta = model(Ia)
+    outta = model.predict(Ia)
 
-    polygons = extractPolygons(outta[0].numpy(),0.0038)
 
     print(outta)

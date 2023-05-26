@@ -9,6 +9,7 @@ __pycache__
 trn.log
 *.log
 train_old.py
+mydata.csv
 
 # virtual environment
 venv/
