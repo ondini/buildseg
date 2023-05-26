@@ -32,7 +32,7 @@ def evaluate(args):
     valid_dataset = FVDataset(
         val_data_path, val_label_path, val_list_path,
         augmentation=False,
-        size_coefficient=1/5
+        size_coefficient=args.dataset_coefficient,
     )
 
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, persistent_workers=True)
@@ -53,7 +53,13 @@ def evaluate(args):
         desc = f'FV: {run_name} \n \
             Model: {model_name} \n \
             Checkpoint: {model_path} \n \
-            Batch size: {args.batch_size} \n \n'
+            Batch size: {args.batch_size} \n \
+            Use reg: {args.use_reg} \n \
+            Use sam: {args.use_sam} \n \
+            Get poly: {args.get_poly} \n \
+            Hard pred: {args.hard_pred} \n \
+            Dataset coefficient: {args.dataset_coefficient} \n \
+            Device: {device} \n \n'
 
         logging.info(desc)
 
@@ -73,22 +79,20 @@ def evaluate(args):
         
         y_true, y_pred = torch.concat(y_true,0), torch.concat(y_pred, 0)
 
-        metric_names = ["iou", "dice", "matthews"]
+        metric_names = ["iou", "dice"] #, "matthews", "precision", "recall"]
         metrics = {
             metric_name : GetMetricFunction(metric_name) for metric_name in metric_names
         } 
         metrics.update( {
-            f"{metric_name}_b{1}" : GetMetricFunction(metric_name, 1) for metric_name in metric_names
+            f"{metric_name}_b{1}" : GetMetricFunction(metric_name, 1) for metric_name in metric_names[1:]
         })
         metrics.update({
-            f"{metric_name}_b{3}" : GetMetricFunction(metric_name, 3) for metric_name in metric_names
+            f"{metric_name}_b{3}" : GetMetricFunction(metric_name, 3) for metric_name in metric_names[1:]
         } )
         metrics.update({
-            f"{metric_name}_b{5}" : GetMetricFunction(metric_name, 5) for metric_name in metric_names
+            f"{metric_name}_b{5}" : GetMetricFunction(metric_name, 5) for metric_name in metric_names[1:]
         } )
-
         
-
         results = {}
         for metric_name, metric in metrics.items():
             res = metric(y_true, y_pred)
@@ -105,11 +109,12 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:1')
     parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/eval')
     parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--batch_size", type=int, default=35)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--use_reg", type=bool, default=True)
     parser.add_argument("--use_sam", type=bool, default=False)
-    parser.add_argument("--hard_pred", type=bool, default=True)
-    parser.add_argument("--get_poly", type=bool, default=False)
+    parser.add_argument("--hard_pred", type=bool, default=False)
+    parser.add_argument("--get_poly", type=bool, default=True)
+    parser.add_argument("--dataset_coefficient", type=float, default=1/10)
 
     args = parser.parse_args()
 

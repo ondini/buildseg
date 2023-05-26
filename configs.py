@@ -1,6 +1,5 @@
 model_weightss = {
-    'wbce_a08': '/home/kafkaon1/FVAPP/out/train/run_230507-230929/checkpoints/Deeplabv3_err:0.04721_ep:15.pth',
-    'bdc': '/home/kafkaon1/FVAPP/out/train/run_230508-224653/checkpoints/Deeplabv3_err:0.06075_ep:30.pth',
+    'bl_bd_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.16045_ep:26.pth',
 }
 
 model_weights = {
@@ -15,7 +14,7 @@ model_weights = {
     'bce_enc': '/home/kafkaon1/FVAPP/out/train/run_230516-183515/checkpoints/Deeplabv3_err:0.04982_ep:25.pth',
     'wbce_a02_enc': '/home/kafkaon1/FVAPP/out/train/run_230517-134445/checkpoints/Deeplabv3_err:0.01578_ep:17.pth',
     'bl_bce_a084': '/home/kafkaon1/FVAPP/out/train/run_230522-093052/checkpoints/Deeplabv3_err:0.23119_ep:29.pth',
-    'bl_bce_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.15889_ep:28.pth',
+    'bl_bd_a089': '/home/kafkaon1/FVAPP/out/train/run_230523-230648/checkpoints/Deeplabv3_err:0.15889_ep:28.pth',
 }
 
 if __name__ == '__main__':

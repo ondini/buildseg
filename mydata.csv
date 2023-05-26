@@ -1,3 +1,0 @@
-metric,iou,dice,precision,recall,matthews,iou_b1,dice_b1,precision_b1,recall_b1,matthews_b1,iou_b3,dice_b3,precision_b3,recall_b3,matthews_b3,iou_b5,dice_b5,precision_b5,recall_b5,matthews_b5,iou_b7,dice_b7,precision_b7,recall_b7,matthews_b7
-wbce_a08,91.34,95.45,96.00,94.97,93.85,15.61,26.78,26.81,26.80,25.90,41.11,57.86,58.00,57.82,56.32,55.05,70.66,70.87,70.57,68.84,63.16,77.13,77.37,77.01,75.11
-bdc,91.38,95.47,95.66,95.35,93.89,15.48,26.58,26.37,26.84,25.71,41.47,58.22,57.83,58.72,56.71,55.45,70.98,70.55,71.53,69.20,63.63,77.47,77.04,78.02,75.50

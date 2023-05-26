@@ -77,17 +77,17 @@ class DLV3Reg(nn.Module):
         
         self.do_poly = do_poly
 
-    def forward(self, input):
-        seg = self.modelSeg(input)
+    def predict(self, input):
+        seg = (self.modelSeg(input) > 0.5).float()
 
         if not self.do_reg and not self.do_sam:
             return seg
         reg = []
         for i in range(seg.shape[0]):
             seg_i = seg[i,0,:,:].detach().cpu().numpy()
-            in_i = input[i,:,:,:].detach().cpu().permute(1,2,0).numpy()
+            in_i = (input[i,:,:,:].detach().cpu().permute(1,2,0).numpy()*255).astype(np.uint8)
             if self.do_sam:
-                self.samPred.set_image((in_i*255).astype(np.uint8))
+                self.samPred.set_image(in_i)
                 bbxs = self.getBBxs(seg_i)
                 t_bbxs = self.samPred.transform.apply_boxes_torch(bbxs, in_i.shape[:2])
 
@@ -101,13 +101,13 @@ class DLV3Reg(nn.Module):
 
             reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
 
-            if self.do_poly is not None:
-                polygons = extractPolygons(seg_i)
+            if self.do_poly:
+                polygons = extractPolygons(reg_i, 0.0038)
                 reg_i = labelFromPolygons(polygons, in_i.shape[:2])
             
             reg.append(torch.tensor(reg_i.astype(np.uint8)))
                 
-        return torch.stack(reg)
+        return torch.stack(reg).unsqueeze(1).float()
     
     def getBBxs(self, ins_segmentation):
         ins_segmentation = np.uint16(measure.label(ins_segmentation, background=0))
