@@ -8,12 +8,18 @@ import cv2
 import numpy as np
 
 import sys
-sys.path.append("/home/kafkaon1/FVAPP/third_party")
+sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party")
 from projectRegularization import GeneratorResNet,Encoder, regularization
 
-sys.path.append("/home/kafkaon1/FVAPP/third_party/segment-anything/")
+sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
 from segment_anything import sam_model_registry, SamPredictor
 from skimage import measure
+
+
+sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
+from segment_anything import sam_model_registry, SamPredictor
+from skimage import measure
+
 
 def createDeepLabv3(outputchannels):
     """ DeepLabv3
@@ -52,9 +58,9 @@ def createDeepLabv3Plus(outputchannels):
 
 class DLV3Reg(nn.Module):
     def __init__(self, segmentator, 
-                 generator='/home/kafkaon1/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_net', 
-                 encoder='/home/kafkaon1/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',
-                 sam = '/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth',
+                 generator='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_net', 
+                 encoder='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',
+                 sam = '/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/wghs.pth',
                  sam_type = 'vit_h',
                  do_sam = False,
                  do_reg = True,
@@ -75,7 +81,7 @@ class DLV3Reg(nn.Module):
         
         self.do_sam = do_sam
         if self.do_sam:
-            sam = sam_model_registry["vit_h"](checkpoint="/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth")
+            sam = sam_model_registry["vit_h"](checkpoint="/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/wghs.pth")
             sam.to(device)
             self.samPred = SamPredictor(sam) 
         
@@ -138,6 +144,43 @@ class DLV3Reg(nn.Module):
         bbxs = torch.tensor(bbxs, device=self.samPred.device)   
         return bbxs
     
+
+class PolyWorld(nn.Module):
+    def __init__(self):
+        # Load network modules
+        model = R2U_Net()
+        model = model.cuda()
+        model = model.train()
+
+        head_ver = DetectionBranch()
+        head_ver = head_ver.cuda()
+        head_ver = head_ver.train()
+
+        suppression = NonMaxSuppression()
+        suppression = suppression.cuda()
+
+        matching = OptimalMatching()
+        matching = matching.cuda()
+        matching = matching.train()
+
+        # NOTE: The modules are set to .train() mode during inference to make sure that the BatchNorm layers 
+        # rely on batch statistics rather than the mean and variance estimated during training. 
+        # Experimentally, using batch stats makes the network perform better during inference.
+
+        print("Loading pretrained model")
+        model.load_state_dict(torch.load("./trained_weights/polyworld_backbone"))
+        head_ver.load_state_dict(torch.load("./trained_weights/polyworld_seg_head"))
+        matching.load_state_dict(torch.load("./trained_weights/polyworld_matching"))
+
+    def predict(self, input):
+        features = model(rgb)
+        occupancy_grid = head_ver(features)
+
+        _, graph_pressed = suppression(occupancy_grid)
+
+        poly = matching.predict(rgb, features, graph_pressed) 
+
+
 
 def extractPolygons(segmentation, eps =  0.01):
     segmentation = np.uint16(measure.label(segmentation, background=0))

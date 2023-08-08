@@ -2,11 +2,13 @@ import urllib.parse
 import urllib.request
 import json
 import math
+import numpy as np
+import cv2
 
 ### ----- Google Maps API ----- ###
 
 class GoogleAPI:
-    def __init__(self, key_path='/home/kafkaon1/buildseg/api-keys.json'):
+    def __init__(self, key_path='/home/kafkaon1/FVAPP/api-keys.json'):
         with open(key_path, "r") as read_file:
             keys = json.load(read_file)
         self.api_key = keys['google']
@@ -15,6 +17,14 @@ class GoogleAPI:
         url_sat = f'https://maps.googleapis.com/maps/api/staticmap?center={coords[0]},{coords[1]}&zoom={zoom}&size={size[0]}x{size[1]}&maptype=satellite&key={self.api_key}'
         print(url_sat)
         urllib.request.urlretrieve(url_sat, save_path)
+
+    def get_satellite_image_inmemory(self, coords, zoom=20, size=[600, 600]):
+        url_sat = f'https://maps.googleapis.com/maps/api/staticmap?center={coords[0]},{coords[1]}&zoom={zoom}&size={size[0]}x{size[1]}&maptype=satellite&key={self.api_key}'
+        print(url_sat)
+        img_buffer =  urllib.request.urlopen(url_sat).read()
+        img_bytes = np.frombuffer(img_buffer, np.uint8)
+        return cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
+
 
     def get_streetview_image(self, coords, size=[600, 600], fov=100, pitch=0, heading=0, save_path='./tmp_str.jpg'):
         url_str = f'https://maps.googleapis.com/maps/api/streetview?size={size[0]}x{size[1]}&location={coords[0]},{coords[1]}&fov={fov}&pitch={pitch}&heading={heading}&key={self.api_key}'
@@ -39,7 +49,7 @@ class GoogleAPI:
 ### ----- Map Utility functions ----- ###
 
 def distance_from_pixels_to_meters(lat, lng, pixel_x, pixel_y, zoom):
-    #     double scale = Math.Pow(2, m_intZoom);
+#     double scale = Math.Pow(2, m_intZoom);
 # NW_Latitude = CenterLat + (PicSizeY / 2) / scale;
 # NW_Longitude = CenterLon - (PicSizeX / 2) / scale;
 # NE_Longitude = CenterLon + (PicSizeX / 2) / scale;
@@ -113,3 +123,7 @@ def euler_from_quaternion(x, y, z, w):
         return roll_x, pitch_y, yaw_z # in radians
 
 
+if __name__ == "__main__":
+    # TODO : test
+    api = GoogleAPI()
+    api.get_satellite_image([49.57507257901299, 17.242671374299512])

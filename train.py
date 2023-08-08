@@ -21,9 +21,11 @@ def run_epoch(model, device, loss_fn, dataloader, optimizer, metrics, mode, lr_s
         model.eval()  
 
     for  i, (inputs , target) in enumerate(dataloader):
+        if inputs.shape[0] == 1:
+            continue
         logging.info(f"-> Epoch iteration {i}.")
-        inputs = inputs.to(device)
-        target = target.to(device)
+        inputs = inputs.to(device).float()
+        target = target.to(device).float()
         model.zero_grad()
 
         with torch.set_grad_enabled(mode == 'train'): # gradient calculation only in train mode
@@ -53,22 +55,30 @@ def train(args):
     os.makedirs(out_wgh_path, exist_ok=True)
     os.makedirs(out_log_path, exist_ok=True)
 
-    train_data_path = os.path.join(args.dataset_path, 'train/image_resized')
-    train_label_path = os.path.join(args.dataset_path, 'train/label_resized')
-    val_data_path = os.path.join(args.dataset_path, 'val/image_resized')
-    val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
+    # train_data_path = os.path.join(args.dataset_path, 'train/image_resized')
+    # train_label_path = os.path.join(args.dataset_path, 'train/label_resized')
+    # val_data_path = os.path.join(args.dataset_path, 'val/image_resized')
+    # val_label_path = os.path.join(args.dataset_path, 'val/label_resized')
+
+    train_data_path = os.path.join(args.dataset_path, 'fac_imgs')
+    train_label_path = os.path.join(args.dataset_path, 'fac_labels')
+    val_data_path = os.path.join(args.dataset_path, 'fac_imgs')
+    val_label_path = os.path.join(args.dataset_path, 'fac_labels')
+
 
     # Configure the logger
     logging.basicConfig(filename=os.path.join(out_log_path, 'logging.log'), level=logging.INFO)
 
     train_dataset = FVDataset(
         train_data_path, train_label_path, 
+        names_path=os.path.join(args.dataset_path, 'train_fac.txt'),
         augmentation=True,
         size_coefficient = args.dataset_coeff
     )
 
     valid_dataset = FVDataset(
         val_data_path, val_label_path,
+        names_path=os.path.join(args.dataset_path, 'test_fac.txt'),
         augmentation=False,
         size_coefficient = args.dataset_coeff
     )
@@ -100,7 +110,7 @@ def train(args):
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.00001) # factor of 10 lower when I am funetuning
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs) if args.scheduler else None
-    loss = DistanceWeightBCELoss(alpha=0.1, theta=3) #CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
+    loss = CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.1, theta=3) #CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
 
     metric_names = ["iou", "dice", "precision", "recall", "matthews"]
     metrics = {
@@ -161,13 +171,13 @@ if __name__ == '__main__':
 
     parser.add_argument("--model", type=str,  choices={'Deeplabv3+'}, default='Deeplabv3')
     parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
-    parser.add_argument("--num_epochs", type=int,  default=30)
+    parser.add_argument("--num_epochs", type=int,  default=150)
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
-    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/train/run_230503-140231/checkpoints/Deeplabv3_err:0.194_ep:15.pth') #/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
-    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/train')
-    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
-    parser.add_argument("--dataset_coeff", type=float, default=1/18)
-    parser.add_argument("--batch_size_train", type=int, default=20)
+    parser.add_argument("--checkpoint_path", type=str, default='')#/home/kafkaon1/Dev/FVAPP/out/train/run_230525-125829/checkpoints/Deeplabv3_err:0.01101_ep:18.pth') #/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
+    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/Dev/FVAPP/out/train')
+    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/Dev/FVAPP/data/CZ4')
+    parser.add_argument("--dataset_coeff", type=float, default=1)
+    parser.add_argument("--batch_size_train", type=int, default=16)
     parser.add_argument("--batch_size_val", type=int, default=8)
     parser.add_argument("--scheduler", type=bool, default=True)
     parser.add_argument("--freeze", type=str, choices={'none', 'enc', 'encDec','encDecAspp'}, default='none')

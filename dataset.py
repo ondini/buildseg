@@ -31,7 +31,7 @@ class FVDataset(torch.utils.data.Dataset):
         augmentation: transform for image and mask    
     """
     
-    def __init__(self, images_path, labels_path, names_path='', size_coefficient=1, num_classes=2, augmentation=False):   
+    def __init__(self, images_path, labels_path, names_path='', size_coefficient=1, num_classes=2, augmentation=True):   
         self.images_path = images_path 
         self.labels_path = labels_path 
 
@@ -49,18 +49,36 @@ class FVDataset(torch.utils.data.Dataset):
 
         self.coefficient = size_coefficient
 
+
     def __len__(self):
         return int(len(self.image_fns)*self.coefficient)
     
     def transform(self, imageI, label):
+
         if self.augmentation:
-            imageI = T.TrivialAugmentWide()(imageI)
+            transform = T.Compose([
+                T.TrivialAugmentWide(),
+                T.GaussianBlur(kernel_size=3),
+            ])
+            imageI = transform(imageI)
         image, label = T.ToTensor()(imageI), T.ToTensor()(label)
         if self.augmentation:
-            k = random.randint(0, 3)
-            image, label  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2))
-            
-        return image, label
+            merged_tensor = torch.cat((image, label), dim=0)
+            transform = T.Compose([
+                T.RandomHorizontalFlip(0.1),
+                T.RandomVerticalFlip(0.5),
+                T.RandomRotation(degrees=15),
+            ])
+            transformed_tensor = transform(merged_tensor)
+            image = transformed_tensor[:3]  # Extract the first three channels for the image
+            label = (transformed_tensor[3:]>0).float()  # Extract the fourth channel for the label
+
+        
+        # if self.augmentation:
+        #     k = random.randint(0, 3)
+        #     image, label  = torch.rot90(image, k=k, dims=(1, 2)), torch.rot90(label, k=k, dims=(1, 2))
+
+        return image.float(), label.float()
         
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
