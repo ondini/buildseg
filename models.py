@@ -5,21 +5,22 @@ import torch.nn as nn
 
 import segmentation_models_pytorch as smp
 import cv2
+import os
 import numpy as np
+from skimage import measure
 
 import sys
 sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party")
 from projectRegularization import GeneratorResNet,Encoder, regularization
+from PolyWorldPretrainedNetwork import OptimalMatching, R2U_Net, NonMaxSuppression, DetectionBranch
+
+
 
 sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
 from segment_anything import sam_model_registry, SamPredictor
-from skimage import measure
 
-
-sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
-from segment_anything import sam_model_registry, SamPredictor
-from skimage import measure
-
+import torchvision.models.detection as det
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 def createDeepLabv3(outputchannels):
     """ DeepLabv3
@@ -146,41 +147,54 @@ class DLV3Reg(nn.Module):
     
 
 class PolyWorld(nn.Module):
-    def __init__(self):
+    def __init__(self, weights_path='/home/kafkaon1/Dev/FVAPP/third_party/PolyWorldPretrainedNetwork/trained_weights'):
         # Load network modules
-        model = R2U_Net()
-        model = model.cuda()
-        model = model.train()
+        super(PolyWorld, self).__init__()
+        self.encoder = R2U_Net()
+        self.encoder = self.encoder.cuda()
+        self.encoder = self.encoder.train()
 
-        head_ver = DetectionBranch()
-        head_ver = head_ver.cuda()
-        head_ver = head_ver.train()
+        self.head_ver = DetectionBranch()
+        self.head_ver = self.head_ver.cuda()
+        self.head_ver = self.head_ver.train()
 
-        suppression = NonMaxSuppression()
-        suppression = suppression.cuda()
+        self.suppression = NonMaxSuppression()
+        self.suppression = self.suppression.cuda()
 
-        matching = OptimalMatching()
-        matching = matching.cuda()
-        matching = matching.train()
+        self.matching = OptimalMatching()
+        self.matching = self.matching.cuda()
+        self.matching = self.matching.train()
 
         # NOTE: The modules are set to .train() mode during inference to make sure that the BatchNorm layers 
         # rely on batch statistics rather than the mean and variance estimated during training. 
         # Experimentally, using batch stats makes the network perform better during inference.
 
         print("Loading pretrained model")
-        model.load_state_dict(torch.load("./trained_weights/polyworld_backbone"))
-        head_ver.load_state_dict(torch.load("./trained_weights/polyworld_seg_head"))
-        matching.load_state_dict(torch.load("./trained_weights/polyworld_matching"))
+        self.encoder.load_state_dict(torch.load(os.path.join(weights_path, "polyworld_backbone")))
+        self.head_ver.load_state_dict(torch.load(os.path.join(weights_path, "polyworld_seg_head")))
+        self.matching.load_state_dict(torch.load(os.path.join(weights_path, "polyworld_matching")))
 
     def predict(self, input):
-        features = model(rgb)
-        occupancy_grid = head_ver(features)
+        features = self.encoder(input)
+        occupancy_grid = self.head_ver(features)
 
-        _, graph_pressed = suppression(occupancy_grid)
+        _, graph_pressed = self.suppression(occupancy_grid)
 
-        poly = matching.predict(rgb, features, graph_pressed) 
+        poly = self.matching.predict(input, features, graph_pressed) 
+        return poly
 
 
+def createMaskRCNN(num_classes, pretrained=True):
+    model = det.maskrcnn_resnet50_fpn_v2(pretrained=True) #maskrcnn_resnet50_fpn_v2(pretrained=True)
+    # model = det.fasterrcnn_resnet50_fpn(weights="DEFAULT")
+
+    # replace the classifier with a new one, that has
+    # num_classes which is user-defined
+    # get number of input features for the classifier
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    # replace the pre-trained head with a new one
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    return model
 
 def extractPolygons(segmentation, eps =  0.01):
     segmentation = np.uint16(measure.label(segmentation, background=0))

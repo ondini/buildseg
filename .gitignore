@@ -17,6 +17,11 @@ venv/
 # big and external files
 data/
 third_party/
+vision/
 
 # output files
 out/
+
+# dataset visualization
+vizes/
+graphics/
