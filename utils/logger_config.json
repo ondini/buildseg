@@ -1,0 +1,31 @@
+
+{
+
+    "formatters": {
+        "simple": {"format": "%(message)s"}, 
+        "datetime": {"format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"}
+    }, 
+    "handlers": {
+        "info_file_handler": {
+            "class": "logging.handlers.FileHandler", 
+            "level": "INFO", 
+            "formatter": "datetime", 
+            "filename": "info.log", 
+            "encoding": "utf8"
+        },
+        "debug_file_handler": {
+            "class": "logging.handlers.FileHandler", 
+            "level": "DEBUG", 
+            "formatter": "simple", 
+            "filename": "debug.log",
+            "encoding": "utf8"
+        }
+    }, 
+    "root": {
+        "level": "INFO", 
+        "handlers": [
+            "debug_file_handler", 
+            "info_file_handler"
+        ]
+    }
+}
