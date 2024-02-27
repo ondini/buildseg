@@ -50,13 +50,20 @@ class FVDataloaderIS(DataLoader):
     """
     MNIST data loading demo using BaseDataLoader
     """
-    def __init__(self, dataset_path, names_file, batch_size=2, shuffle=True, num_workers=1, **kwargs):
-        transform = A.Compose([
-            A.RandomCrop(width=450, height=450),
-            A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(p=0.2),
-        ], bbox_params=A.BboxParams(format='coco'))
-        
+    def __init__(self, dataset_path, names_file, batch_size=2, shuffle=True, num_workers=1, augmentation=True, **kwargs):
+        if augmentation:
+            transform = A.Compose([
+                A.CLAHE(),  
+                A.HorizontalFlip(p=.5),
+                A.VerticalFlip(p=.05),
+                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=15, p=.55),
+                A.HueSaturationValue(),
+            ]) #, bbox_params=A.BboxParams(format='pascal_voc'))
+        else :
+            transform = A.Compose([
+                A.NoOp()
+            ])
+            
         data_path = Path(dataset_path) / 'fac_imgs'
         label_path = Path(dataset_path) / 'fac_labels'
 

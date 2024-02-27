@@ -22,7 +22,7 @@ Then  simply run
 
 You can view the results of your training in the browser after running
 
-    tensorboar --logdir=/outpath/you/have/in/confing --host 0.0.0.0
+    tensorboard --logdir=/outpath/you/have/in/confing --host 0.0.0.0
 
 
 

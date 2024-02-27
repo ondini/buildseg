@@ -16,12 +16,12 @@ from collections import defaultdict
   
 IMG_SHAPE = (960, 560)
 
-DB_PATH =  "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
+DB_PATH =  "/home/kafkaon1/Dev/data/db_updated_28_01_24.db" # "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
 IN_IMGS_PATH = "/local2/homes/zderaann/roof_annotations/annotated_imgs"
 IN_SAT_PATH = "/local2/homes/zderaann/roof_annotations/satelite"
 
 
-OUT_PATH = '/home/kafkaon1/Dev/data/CZIS1'
+OUT_PATH = '/home/kafkaon1/Dev/data/CZISUPD2lll'
 
 # create output directories
 out_sat_imgs_path = os.path.join(OUT_PATH, 'sat_imgs')

@@ -1,8 +1,10 @@
 import segmentation_models_pytorch as smp
+import torch
 import torch.nn as nn
 import torchvision.models.detection as det
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
+from third_party import GeneratorResNet,Encoder,regularization
 
 
 class DeepLabv3Plus(nn.Module):
@@ -27,6 +29,7 @@ class DeepLabv3Plus(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+
 class MaskRCNN(nn.Module):
     """ MaskRCNN - model for object detection with resnet50 backbone
     # Args
@@ -35,6 +38,8 @@ class MaskRCNN(nn.Module):
     """
     
     def __init__(self, num_classes, fast=False, loss='default'):
+        from scoring import make_fasrcnn_loss
+        
         super().__init__()
         self.num_classes = num_classes
         if not fast:
@@ -42,30 +47,49 @@ class MaskRCNN(nn.Module):
         else:
             self.model = det.fasterrcnn_resnet50_fpn(pretrained=True)
 
+        det.roi_heads.maskrcnn_loss = make_fasrcnn_loss('CombLoss', fast)
         # replace the classifier with a new one, that has
         # num_classes which is user-defined
         # get number of input features for the classifier
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         # replace the pre-trained head with a new one
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    
+        
+        for module in self.model.modules():
+            if 'output_size' in dir(module) and module.output_size == (14,14):
+                module.output_size = (56,56)
+                
     def forward(self, x):
         return self.model(x)
     
 class Regularizer(nn.Module):
-    def __init__(self, num_classes,
-                 generator='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_net', 
-                 encoder='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',):
+    def __init__(self, device='cuda:0',
+                 generator='/home/kafkaon1/Dev/FVAPP/third_party/PR/saved_models_gan/E95000_net', 
+                 encoder='/home/kafkaon1/Dev/FVAPP/third_party/PR/saved_models_gan/E95000_e1',):
         super().__init__()
         self.encReg = Encoder()
         self.genReg = GeneratorResNet()
-        self.genReg.load_state_dict(torch.load(generator, map_location=torch.device('cuda:0')))
-        self.encReg.load_state_dict(torch.load(encoder , map_location=torch.device('cuda:0')))
+        self.genReg.load_state_dict(torch.load(generator, map_location=torch.device(device)))
+        self.encReg.load_state_dict(torch.load(encoder , map_location=torch.device(device)))
         self.encReg.to(device)
         self.genReg.to(device)
-    
-    def forward(self, x):
         
-        x = self.encReg(x)
-        x = self.genReg(x)
-        return x
+    def forward(self, img, seg):
+        return regularization(img, seg, [self.encReg, self.genReg])
+    
+from mmdet.apis import init_detector, inference_detector
+from mmdet.utils import register_all_modules
+
+
+class RefineMask(nn.Module):
+    """ RefineMask - model for instance segmentation with resnet50 backbone"""
+    def __init__(self, cfg_path, ckpt_path=None):
+        super().__init__()
+        register_all_modules()
+        if ckpt_path is not None:
+            self.model = init_detector(cfg_path, ckpt_path)
+        else:
+            self.model = init_detector(cfg_path)
+
+    def forward(self, x):
+        return inference_detector(self.model, x)

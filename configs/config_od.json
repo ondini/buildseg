@@ -1,36 +1,36 @@
 {
     "name": "SolAR_MCRNN",
-    "device": "cuda:0",
+    "device": "cuda:1",
     "gpus": [],
     "model": {
         "type": "MaskRCNN",
         "args": {
-            "num_classes": 6,
+            "num_classes": 10,
             "loss": "FocalLoss"
         }
     },
     "train_data_loader": {
         "type": "FVDataloaderIS",
         "args": {
-            "dataset_path": "/home/kafkaon1/Dev/data/CZIS1",
+            "dataset_path": "/home/kafkaon1/Dev/data/CZISUPD",
             "names_file": "train_fac.txt",
-            "batch_size": 6,
+            "batch_size": 4,
             "shuffle": true,
             "num_workers": 2,
             "augmentation": true,
-            "size_coefficient": 0.4
+            "size_coefficient": 1
         }
     },
     "val_data_loader": {
         "type": "FVDataloaderIS",
         "args": {
-            "dataset_path": "/home/kafkaon1/Dev/data/CZIS1",
+            "dataset_path": "/home/kafkaon1/Dev/data/CZISUPD",
             "names_file": "test_fac.txt",
-            "batch_size": 6,
+            "batch_size": 16,
             "shuffle": false,
             "num_workers": 2,
             "augmentation": false,
-            "size_coefficient": 0.3
+            "size_coefficient": 1
         }
     },
     "optimizer": {
@@ -55,12 +55,12 @@
     ],
     "trainer": {
         "type": "ObjDetTrainer",
-        "num_epochs": 50,
+        "num_epochs": 500,
         "out_dir": "/home/kafkaon1/Dev/out/train",
         "save_metric": "max iou",
-        "save_period": 2,
+        "save_period": 3,
         "logging_step": 5,
-        "early_stop": 50,
+        "early_stop": -1,
         "tensorboard": true,
         "verbosity": "INFO",
         "args": {}

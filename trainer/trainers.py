@@ -191,24 +191,34 @@ class ObjDetTrainer(BaseTrainer):
             
             for i, (inputs, targets) in enumerate(self.valid_data_loader):
                 images = list(image.to(self.device) for image in inputs)
-                torch.cuda.synchronize() # ??? What does it do? 
+                targets = [
+                    {
+                        k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                        for k, v in t.items()
+                    }
+                    for t in targets
+                ]
+                
+                out = self.model.model(images, targets)
+                
+                # outputs = [{k: v.to('cpu') for k, v in t.items()} for t in outputs]
 
-                outputs =self.model(images)
-                outputs = [{k: v.to('cpu') for k, v in t.items()} for t in outputs]
+                precisions, recalls, det_matched = calculate_mAP(out, targets, self.model.num_classes)
 
-                precisions, recalls = calculate_mAP(outputs, targets, self.model.num_classes)
+                det_labels, det_masks, det_targets = det_matched
+                loss = self.loss(det_masks.float(), det_targets.float())
+                
                 if i % self.log_step == 0:
                     progress = f"[{i+self.valid_data_loader.batch_size}/{len(self.valid_data_loader)}]"
-                    self.logger.info(f' -> {progress}: validation epoch progress | mAP: {precisions.mean()*100:.1f}%')
+                    self.logger.info(f' -> {progress}: validation epoch progress | loss: {loss.item():.6f}') #mAP: {precisions.mean()*100:.1f}%')
 
-                # self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + i, 'valid')
-                # self.writer.add_image('input/valid', make_grid(inputs.cpu(), nrow=8, normalize=True))
+                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + i, 'valid')
+                self.writer.add_image('input/valid', make_grid(torch.stack(inputs).cpu(), nrow=8, normalize=True))
 
-                # self.metrics.add(outputs, targets, 'valid')
-
+                self.metrics['loss'] = loss.item()
+                self.metrics.add(det_masks, det_targets, 'valid')
+                
         return self.metrics.epoch_end()
-
-
 
 
 def find_intersection(set_1, set_2):
@@ -249,7 +259,7 @@ def find_jaccard_overlap(set_1, set_2):
 
     return intersection / union  # (n1, n2)
 
-def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_threshold=0.6):
+def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_threshold=0.8):
     """
     Calculate the Mean Average Precision (mAP) of detected objects.
 
@@ -272,14 +282,21 @@ def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_thres
     class_fps = torch.zeros((n_classes - 1), dtype=torch.float)  # (n_classes - 1)
     n_dets = 0
     
+    corr_labels_s = []
+    corr_targets_s = []
+    corr_detections_s = []
+    
     for id in range(len(detections)): # go over all imgs in batch
+        corr_labels = []
+        corr_targets = []
+        corr_detections = []
         for c in range(1, n_classes):
             # Extract only objects with this class
             target_ids = targets[id]['labels'] == c
             true_class_boxes = targets[id]['boxes'][target_ids,:]
 
             # Keep track of which true objects with this class have already been 'detected'
-            true_class_boxes_detected = torch.zeros((targets[id]['labels'].size(0)), dtype=torch.uint8)
+            true_class_boxes_detected = torch.zeros(true_class_boxes.shape[0], dtype=torch.uint8)
 
             # Extract only detections over some score
             det_filtered = detections[id]['scores'] > score_threshold
@@ -299,7 +316,7 @@ def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_thres
             false_positives = 0
             
             for d in range(n_class_detections):
-                this_detection_box = det_class_boxes[d].unsqueeze(0).cpu()  # (1, 4)
+                this_detection_box = det_class_boxes[d].unsqueeze(0)  # (1, 4)
 
                 # If no such object in this image, then the detection is a false positive
                 if true_class_boxes.size(0) == 0:
@@ -310,17 +327,16 @@ def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_thres
                 overlaps = find_jaccard_overlap(this_detection_box, true_class_boxes)  # (1, n_class_objects_in_img)
                 max_overlap, ind = torch.max(overlaps.squeeze(0), dim=0)  # (), () - scalars
 
-                # 'ind' is the index of the object in these image-level tensors 'object_boxes', 'object_difficulties'
-                # In the original class-level tensors 'true_class_boxes', etc., 'ind' corresponds to object with index...
-                original_ind = torch.LongTensor(range(true_class_boxes.size(0)))[ind]
-                # We need 'original_ind' to update 'true_class_boxes_detected'
-
                 # If the maximum overlap is greater than the threshold of 0.5, it's a match
                 if max_overlap.item() > iou_threshold:
                     # If this object has already not been detected, it's a true positive
-                    if true_class_boxes_detected[original_ind] == 0:
+                    if true_class_boxes_detected[ind] == 0:
                         true_positives += 1
-                        true_class_boxes_detected[original_ind] = 1  # this object has now been detected/accounted for
+                        true_class_boxes_detected[ind] = 1  # this object has now been detected/accounted for
+                        corr_targets.append(targets[id]['masks'][target_ids][ind])
+                        corr_labels.append(targets[id]['labels'][target_ids][ind])
+                        corr_detections.append(det_class_images[d][0])
+                        
                     # Otherwise, it's a false positive (since this object is already accounted for)
                     else:
                         false_positives += 1
@@ -332,11 +348,20 @@ def calculate_mAP(detections, targets, n_classes, iou_threshold=0.5, score_thres
             class_tps[c - 1] += true_positives
             class_fps[c - 1] += false_positives
             n_dets += true_class_boxes.size(0)
+        if len(corr_labels) > 0:
+            corr_labels_s.append(torch.stack(corr_labels))
+            corr_targets_s.append(torch.stack(corr_targets))
+            corr_detections_s.append(torch.stack(corr_detections))
             
 
     precision = class_tps / (
             class_tps + class_fps + 1e-10)  # (n_class_detections)
     recall = class_tps / n_dets  # (n_class_detections)
+    if len(corr_labels_s) > 0:
+        correspondences = (torch.concat(corr_labels_s), 
+                            torch.concat(corr_detections_s), 
+                            torch.concat(corr_targets_s))
+    else:
+        correspondences = (torch.tensor([0]), torch.tensor(np.zeros((1, 256, 256))), torch.tensor(np.zeros((1, 256, 256))))
 
-    return precision, recall
-
+    return precision.mean(), recall.mean(), correspondences

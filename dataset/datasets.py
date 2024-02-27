@@ -9,6 +9,7 @@ import torch
 import torchvision.transforms as T
 import json
 # import fiftyone as fo
+import matplotlib.pyplot as plt
 
 
 
@@ -296,40 +297,12 @@ class FVDatasetIS(torch.utils.data.Dataset):
 
         self.num_classes = num_classes
         self.augmentation = augmentation
+        self.transform = transform
 
         self.coefficient = size_coefficient
 
     def __len__(self):
         return int(len(self.image_fns) * self.coefficient)
-
-    def transform(self, imageI, masksI):
-        if self.augmentation:
-            transform = T.Compose(
-                [
-                    T.TrivialAugmentWide(),
-                ]
-            )
-            imageI = transform(imageI)
-        image, masks = T.ToTensor()(imageI), torch.tensor(np.array(masksI))
-
-        if False:  # self.augmentation:
-            merged_tensor = torch.cat((image, masks), dim=0)
-            transform = T.Compose(
-                [
-                    T.RandomHorizontalFlip(0.5),
-                    T.RandomVerticalFlip(0.05),
-                    T.RandomRotation(degrees=15),
-                ]
-            )
-            transformed_tensor = transform(merged_tensor)
-            image = transformed_tensor[
-                :3
-            ]  # Extract the first three channels for the image
-            masksO = (
-                transformed_tensor[3:] > 0
-            )  # Extract the mask channels and make them binary
-
-        return image.float(), masks.to(torch.uint8)
 
     def __getitem__(self, i):
         image_file_path = os.path.join(self.images_path, self.image_fns[i])
@@ -339,58 +312,18 @@ class FVDatasetIS(torch.utils.data.Dataset):
         with open(label_file_path, "r") as json_file:
             annotations = json.load(json_file)
 
-        masks = []
-        labels = []
-        instance_ids = []
         bbs = []  # boudning boxes
-
-        for annotation in annotations:
-            if (
-                annotation["class_id"] != 0 and annotation["class_id"] % 3 == 0
-            ):  # skip chimneys for now
-                continue
-            instance_mask = np.zeros(annotation["img_size_old"][:2], dtype=np.uint8)
-            polygon = np.array(annotation["polygon"], dtype=np.int32)
-            if len(polygon) < 3:
-                continue
-            cv2.fillPoly(instance_mask, [polygon], (1, 1, 1))
-
-            instance_mask_r = cv2.resize(
-                instance_mask,
-                dsize=(annotation["img_size_new"][:2]),
-                interpolation=cv2.INTER_AREA,
-            )
-
-            if instance_mask_r.sum() <= 6:
-                continue  # skip empty masks -> MASKS WENt empty after resizing
-                            
-            masks.append(instance_mask_r)
-            labels.append(annotation["class_id"] + 1)
-            instance_ids.append(annotation["instance_id"])
+        masks, labels, instance_ids = generate_annotations(annotations)
 
         labels = torch.tensor(labels).long()
         instance_ids = torch.tensor(instance_ids).long()
-        image, masks = self.transform(imageI, masks)
-
-        remove_ids = []
-        for i, mask in enumerate(masks):
-            pos = np.nonzero(mask)
-            if len(pos) < 1:
-                print(mask.shape, pos)
-            xmin = pos[:, 1].min()
-            xmax = pos[:, 1].max()
-            ymin = pos[:, 0].min()
-            ymax = pos[:, 0].max()
-            if (xmax - xmin) < 1 or (ymax - ymin) < 1:
-                remove_ids.append(i)
-                continue  # skip single-line masks, since bounding boxes muse be at least 2x2
-            bbs.append([xmin, ymin, xmax, ymax])
+        transforms = self.transform(image=np.array(imageI), masks=masks)
+        image, masks = T.ToTensor()(transforms["image"]), torch.tensor(np.array(transforms["masks"]))
+        bbs, remove_ids = generate_bbs(masks)
         
-        if len(remove_ids) > 0:
-            # remove labels and masks on this id 
-            print('removing', remove_ids)
-            # remove from ids tensors
-            for remove_id in remove_ids:
+        if len(remove_ids) > 0: # some bbs were removed, remove labels and masks on this id
+            # print('removing', remove_ids)
+            for remove_id in remove_ids:     # remove ids  from  tensors
                 masks = torch.cat((masks[:remove_id], masks[remove_id+1:]))
                 labels = torch.cat((labels[:remove_id], labels[remove_id+1:]))
                 instance_ids = torch.cat((instance_ids[:remove_id], instance_ids[remove_id+1:]))
@@ -399,62 +332,19 @@ class FVDatasetIS(torch.utils.data.Dataset):
             torch.tensor(bbs, dtype=torch.float32)
             if len(bbs) > 0
             else torch.tensor(np.zeros((0, 4)))
-        )  # cuz in bbs is expected a tensor of shape [N, 4] where N is the number of bounding boxes
-        
-        masks = (
-            masks
-            if len(masks) > 0
-            else torch.tensor(np.zeros((0, 960, 540)), dtype=torch.uint8)
-        )
-        
-        return image, {
-            "masks": masks,
-            "labels": labels,
-            "boxes": bbs,
-            "image_id": torch.tensor(i),
-        }
-
-
-    def __getitemaa__(self, i):
-        image_file_path = os.path.join(self.images_path, self.image_fns[i])
-        label_file_path = os.path.join(self.labels_path, self.label_fns[i])
-
-        imageI = Image.open(image_file_path)
-        with open(label_file_path, "r") as json_file:
-            annotations = json.load(json_file)
-
-        
-        bbs = []  # boudning boxes
-        masks, labels, instance_ids = generate_annotations(annotations)
-
-        labels = torch.tensor(labels).long()
-        instance_ids = torch.tensor(instance_ids).long()
-        image, masks = self.transform(imageI, masks)
-        bbs = generate_bbs(masks)
-
-        bbs = (
-            torch.tensor(bbs, dtype=torch.float32)
-            if len(bbs) > 0
-            else torch.tensor(np.zeros((0, 4)))
         )  # in bbs is expected a tensor of shape [N, 4] where N is the number of bounding boxes
-        areas = (bbs[:, 3] - bbs[:, 1]) * (bbs[:, 2] - bbs[:, 0])
-        iscrowd = torch.zeros((len(bbs),), dtype=torch.int64)
 
         masks = (
             masks
             if len(masks) > 0
             else torch.tensor(np.zeros((0, 960, 540)), dtype=torch.uint8) # shape muset be the same as img
         )
-        if masks.shape[0] != bbs.shape[0]:
-            print('EEEEEEEEEEEEEEEEEEEEEEEE')
-        
+
         return image, {
             "masks": masks,
             "labels": labels,
             "boxes": bbs,
             "image_id": torch.tensor(i),
-            "iscrowd": iscrowd,
-            "area": areas,
         }
         
     def collate_fn(batch):
@@ -463,17 +353,21 @@ class FVDatasetIS(torch.utils.data.Dataset):
 
 def generate_bbs(masks):
     bbs = []
-    for mask in masks:
+    remove_ids = []
+    for i, mask in enumerate(masks):
         pos = np.nonzero(mask)
-        
+        if pos.numel() < 1:
+            remove_ids.append(i)
+            continue
         xmin = pos[:, 1].min()
         xmax = pos[:, 1].max()
         ymin = pos[:, 0].min()
         ymax = pos[:, 0].max()
         if (xmax - xmin) < 1 or (ymax - ymin) < 1:
-            continue  # skip single-line masks, since bounding boxes muse be at least 2x2
+                remove_ids.append(i)
+                continue  #   skip single-line masks, since bounding boxes muse be at least 2x2
         bbs.append([xmin, ymin, xmax, ymax])
-    return bbs
+    return bbs, remove_ids
 
 def generate_annotations(annotations):
         # generate masks so that they are properly cropped
@@ -501,7 +395,7 @@ def generate_annotations(annotations):
                 interpolation=cv2.INTER_AREA,
             )
 
-            if instance_mask_r.sum() < 1:
+            if instance_mask_r.sum() < 8:
                 continue  # skip empty masks -> MASKS WENt empty after resizing, if they were too small at the original image
             
             if annotation["class_id"] == 0: # roof

@@ -30,7 +30,7 @@ class Metric():
     def add(self, prediction, target) -> None:
         """Add the prediction and target to the metric"""
         value = self._function(prediction, target)
-        self._history.append(value)
+        self._history.append(value)            
         return value
 
     def compute(self, prediction, target) -> float:
@@ -67,7 +67,7 @@ class Metrics():
         self._metrics = {}
         for metric_name, metric_fn in metric_fns.items():
             self._metrics[metric_name] = Metric(metric_fn, metric_name)
-        self._metrics['loss'] = Metric(lambda x, y: 0, 'loss')
+        self._metrics['loss'] = Metric(lambda x, y: 0, 'loss') # loss is typically computed outside of the metrics
     
     def __str__(self) -> str:
         return f"Metrics_object(functions={[name for name in self._metrics.keys()]})"
@@ -84,6 +84,7 @@ class Metrics():
             if self.writer is not None:
                 self.writer.add_scalar(f"{metric._name}/{self.phase if phase=='' else phase }", value) # possibly add moving average?
     
+    
     def __getitem__(self, metric_name) -> float:
         return self._metrics[metric_name].value
     
@@ -95,12 +96,13 @@ class Metrics():
         log = {}
         for metric in self._metrics.values():
             res = metric.epoch_end()
-            log[metric._name] = res
-            if self.writer is not None:
-                self.writer.add_scalar(f"{metric._name}/{self.phase if phase=='' else phase}_epoch", res)
+            if res == res: # check for nan
+                log[metric._name] = res
+            # if self.writer is not None:
+            #     self.writer.add_scalar(f"{metric._name}/{self.phase if phase=='' else phase}_epoch", res)
         
         if self.writer is not None:
-            self.writer.add_scalars(f"{self.phase}_epoch", log)
+            self.writer.add_scalars(f"{self.phase if phase=='' else phase}_epoch", log)
 
         return log
 

@@ -285,3 +285,98 @@ class CombLoss(nn.Module):
     def forward(self, predict, targets):
         return self.BoundaryLoss(predict, targets)*self.alpha + (1-self.alpha)*self.AreaLoss(predict, targets)
 
+### SPECIFIC LOSS REIMPLEMENTATION FOR MASKRCNN
+
+def make_fasrcnn_loss(loss_name, fast=False):
+    # get loss function by its name from this file 
+    loss_fn = globals()[loss_name]()
+    
+    def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+        """
+        Computes the loss for Faster R-CNN.
+
+        Args:
+            class_logits (Tensor)
+            box_regression (Tensor)
+            labels (list[BoxList])
+            regression_targets (Tensor)
+
+        Returns:
+            classification_loss (Tensor)
+            box_loss (Tensor)
+        """
+
+        labels = torch.cat(labels, dim=0)
+        regression_targets = torch.cat(regression_targets, dim=0)
+
+        classification_loss = F.cross_entropy(class_logits, labels)
+
+        # get indices that correspond to the regression targets for
+        # the corresponding ground truth labels, to be used with
+        # advanced indexing
+        sampled_pos_inds_subset = torch.where(labels > 0)[0]
+        labels_pos = labels[sampled_pos_inds_subset]
+        N, num_classes = class_logits.shape
+        box_regression = box_regression.reshape(N, box_regression.size(-1) // 4, 4)
+
+        box_loss = F.smooth_l1_loss(
+            box_regression[sampled_pos_inds_subset, labels_pos],
+            regression_targets[sampled_pos_inds_subset],
+            beta=1 / 9,
+            reduction="sum",
+        )
+        box_loss = box_loss / labels.numel()
+
+        return classification_loss, box_loss
+    
+    def maskrcnn_loss(mask_logits, proposals, gt_masks, gt_labels, mask_matched_idxs):
+        # type: (Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor]) -> Tensor
+        """
+        Args:
+            proposals (list[BoxList])
+            mask_logits (Tensor)
+            targets (list[BoxList])
+
+        Return:
+            mask_loss (Tensor): scalar tensor containing the loss
+        """
+        # print('aaaaaaaaa')
+        discretization_size = mask_logits.shape[-1]
+        labels = [gt_label[idxs] for gt_label, idxs in zip(gt_labels, mask_matched_idxs)]
+        mask_targets = [
+            project_masks_on_boxes(m, p, i, discretization_size) for m, p, i in zip(gt_masks, proposals, mask_matched_idxs)
+        ]
+
+        labels = torch.cat(labels, dim=0)
+        mask_targets = torch.cat(mask_targets, dim=0)
+
+        # torch.mean (in binary_cross_entropy_with_logits) doesn't
+        # accept empty tensors, so handle it separately
+        if mask_targets.numel() == 0:
+            return mask_logits.sum() * 0
+
+        mask_loss = F.binary_cross_entropy_with_logits(
+            mask_logits[torch.arange(labels.shape[0], device=labels.device), labels], mask_targets
+        )
+        return mask_loss
+
+    return maskrcnn_loss if not fast else fastrcnn_loss
+
+## UTILS FOR OFFICIAL MASKRCNN LOSS
+
+from torchvision.ops import boxes as box_ops, roi_align
+
+def project_masks_on_boxes(gt_masks, boxes, matched_idxs, M):
+    # type: (Tensor, Tensor, Tensor, int) -> Tensor
+    """
+    Given segmentation masks and the bounding boxes corresponding
+    to the location of the masks in the image, this function
+    crops and resizes the masks in the position defined by the
+    boxes. This prepares the masks for them to be fed to the
+    loss computation as the targets.
+    """
+    matched_idxs = matched_idxs.to(boxes)
+    rois = torch.cat([matched_idxs[:, None], boxes], dim=1)
+    gt_masks = gt_masks[:, None].to(rois)
+    return roi_align(gt_masks, rois, (M, M), 1.0)[:, 0]
