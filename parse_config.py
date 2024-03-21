@@ -27,7 +27,7 @@ class ConfigParser:
         if run_id is None: # use timestamp as default run-id
             run_id = datetime.now().strftime(r'%m%d_%H%M%S')
         
-        run_name = f'{experiment_name}_{run_id}'
+        run_name = f'{experiment_name}/{run_id}'
         self.out_dir = out_dir / run_name
 
         self.out_dir.mkdir(0o755, parents=True, exist_ok=True)  # make directory for saving checkpoints and log.

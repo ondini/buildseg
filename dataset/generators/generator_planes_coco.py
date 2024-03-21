@@ -5,20 +5,21 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+import pdb
 
 from PIL import Image, ImageDraw
 import json
   
 from collections import defaultdict
   
-IMG_SHAPE = (960, 560)
+IMG_SHAPE_ = (1333, 800)
 
 DB_PATH =  "/home/kafkaon1/Dev/data/db_updated_28_01_24.db" # "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
 IN_IMGS_PATH = "/local2/homes/zderaann/roof_annotations/annotated_imgs"
 IN_SAT_PATH = "/local2/homes/zderaann/roof_annotations/satelite"
 
 
-OUT_PATH = '/home/kafkaon1/Dev/data/COCO_2702'
+OUT_PATH = '/home/kafkaon1/Dev/data/COCO_0503'
 
 COLORS = [
   "green",
@@ -69,11 +70,26 @@ from pycocotools import mask
 
 random.seed(42)
 
+def get_new_size(old_size):
+    # get new size by keeping the aspect ratio
+    old_height, old_width = old_size
+    tgt_width, tgt_height = IMG_SHAPE_
+    if old_width / old_height > tgt_width / tgt_height:
+        new_width = tgt_width
+        new_height = int(old_height * tgt_width / old_width)
+    else:
+        new_height = tgt_height
+        new_width = int(old_width * tgt_height / old_height)
+        
+    
+    return (new_width, new_height)
+    
+
 def generate(test=0.2, train=0.8):
 
-    thrs = {'test': test, 'train': test + train}
+    thrs = {'train': train, 'test': test + train}
 
-    for filename in ['test', 'train']:
+    for filename in ['train', 'test']:
         out_imgs_path = os.path.join(OUT_PATH, f'{filename}_imgs') # image path
 
         if not os.path.exists(out_imgs_path):
@@ -86,7 +102,7 @@ def generate(test=0.2, train=0.8):
         c.execute("SELECT * FROM annotation")
 
         rows = c.fetchall() # get all rows from the table = all annotations
-        random.shuffle(rows)
+        #random.shuffle(rows)
 
         categories = [{"id": i + 1, "name": CLASSES_COCO[i]} for i in range(NUM_COCO_CLASSES)]
 
@@ -101,13 +117,15 @@ def generate(test=0.2, train=0.8):
             img_path = os.path.join(IN_IMGS_PATH, img_fn)
             img = cv2.imread(img_path)[:,:,::-1]
             img_annotation = json.loads(row[2])
-
-            img_r = cv2.resize(img, dsize=IMG_SHAPE, interpolation=cv2.INTER_AREA)
+            print(img.shape)
+            new_shape = get_new_size(img.shape[:2])
+            # pdb.set_trace()
+            img_r = cv2.resize(img, dsize=new_shape, interpolation=cv2.INTER_AREA)
             Image.fromarray(img_r).save(os.path.join(out_imgs_path, row[0]))
 
             img_id = irow + 1
 
-            images.append({"id": img_id, "file_name": img_fn, "width": IMG_SHAPE[0], "height": IMG_SHAPE[1], "date_captured": "2013-11-18 02:53:27"}) # random date
+            images.append({"id": img_id, "file_name": img_fn, "width": new_shape[0], "height": new_shape[1], "date_captured": "2013-11-18 02:53:27"}) # random date
 
             roof_masks = []
             roof_labels = []
@@ -134,7 +152,7 @@ def generate(test=0.2, train=0.8):
                 # must be resized after fillpoly, as otherwise the polygons are not as precise
                 instance_mask_r = cv2.resize(
                     instance_mask,
-                    dsize=(IMG_SHAPE),
+                    dsize=(new_shape),
                     interpolation=cv2.INTER_AREA,
                 )
 
@@ -207,7 +225,6 @@ def generate(test=0.2, train=0.8):
             
             if irow / len(rows) > thrs[filename]:
                 break
-        
 
         coco_data = {
             "info": {},

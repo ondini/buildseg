@@ -1,9 +1,9 @@
 {
     "name": "SolAR_DLV3Pl",
-    "device": "cuda:0",
+    "device": "cuda:1",
     "gpus": [],
     "model": {
-        "type": "DeepLabv3Plus",
+        "type": "DeeplabV3",
         "args": {
             "num_classes": 1
         }
@@ -54,7 +54,7 @@
     ],
     "trainer": {
         "type": "SegTrainer",
-        "num_epochs": 2,
+        "num_epochs": 10,
         "out_dir": "/home/kafkaon1/Dev/out",
         "save_metric": "max iou",
         "save_period": 1,

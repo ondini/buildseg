@@ -5,6 +5,25 @@ import torchvision.models.detection as det
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 from third_party import GeneratorResNet,Encoder,regularization
+from torchvision.models.segmentation import fcn_resnet50, deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
+import torch.nn as nn
+import torch.nn.functional as F
+
+class FCN(nn.Module):
+    def __init__(self, n_classes, n_channels=4):
+        super().__init__()
+        self.model = fcn_resnet50(pretrained=False, num_classes=n_classes, aux_loss=None)
+        
+    def forward(self, x):
+        return self.model(x)
+    
+class DeeplabV3(nn.Module):
+    def __init__(self, num_classes, n_channels=4):
+        super().__init__()
+        self.model = deeplabv3_resnet50(weights=None, num_classes=num_classes, aux_loss=None)
+        
+    def forward(self, x):
+        return F.sigmoid(self.model(x)['out'])
 
 
 class DeepLabv3Plus(nn.Module):

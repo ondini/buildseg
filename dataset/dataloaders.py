@@ -6,22 +6,35 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import albumentations as A
 
 from .datasets import SEA_AISegDatasetFiftyone, FVDataset, FVDatasetIS
+from .dataset_kpts import FVDatasetKPTS
 from pathlib import Path
 
 class SEA_AIDataLoader(DataLoader):
     """
     A dataloader fo the PyTorch SEA.AI dataset for maritime segmentation.
     """
-    def __init__(self, dataset_name, batch_size=2, shuffle=True, num_workers=1, **kwargs):
-        transform = A.Compose([
-            A.RandomCrop(width=256, height=256),
-            A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(p=0.2),
-        ])
-
-        self.dataset = SEA_AISegDatasetFiftyone(dataset_name, **kwargs)
+    def __init__(self, coco_root, ann_file, img_prefix, batch_size=2, shuffle=True, num_workers=1, augmentation=False, **kwargs):
+        if augmentation:
+            transform = A.Compose([
+                A.CLAHE(),  
+                A.HorizontalFlip(p=.5),
+                A.VerticalFlip(p=.05),
+                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=15, p=.55),
+                A.HueSaturationValue(),
+            ]) #, bbox_params=A.BboxParams(format='pascal_voc'))
+        else :
+            transform = A.Compose([
+                A.NoOp()
+            ])
+            
+        self.dataset =  FVDatasetKPTS(
+            coco_root, ann_file, 
+            img_prefix, 
+            transform=transform,
+            **kwargs
+        )
         super().__init__(self.dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-
+        
 class FVDataloader(DataLoader):
     """
 
@@ -70,6 +83,32 @@ class FVDataloaderIS(DataLoader):
         self.dataset = FVDatasetIS(
             str(data_path), str(label_path), 
             names_path=str( Path(dataset_path)/ names_file), 
+            transform=transform,
+            **kwargs
+        )
+        super().__init__(self.dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn)
+        
+class FVDataloaderKPT(DataLoader):
+    """
+    MNIST data loading demo using BaseDataLoader
+    """
+    def __init__(self, coco_root, ann_file, img_prefix, batch_size=2, shuffle=True, num_workers=1, augmentation=False, **kwargs):
+        if augmentation:
+            transform = A.Compose([
+                A.CLAHE(),  
+                A.HorizontalFlip(p=.5),
+                A.VerticalFlip(p=.05),
+                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=15, p=.55),
+                A.HueSaturationValue(),
+            ]) #, bbox_params=A.BboxParams(format='pascal_voc'))
+        else :
+            transform = A.Compose([
+                A.NoOp()
+            ])
+            
+        self.dataset =  FVDatasetKPTS(
+            coco_root, ann_file, 
+            img_prefix, 
             transform=transform,
             **kwargs
         )
