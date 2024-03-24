@@ -54,13 +54,18 @@ class FVDatasetKPTS(torch.utils.data.Dataset):
         image_file_path = os.path.join(self.img_path, self.images[image_id]["file_name"])
         
         imageI = Image.open(image_file_path)
-        image = T.ToTensor()(imageI)
         kpts = torch.tensor(annotation["keypoints"])
         if len(kpts) == 0:
-            return image, torch.zeros((1, imageI.size[1], imageI.size[0]))
+            return T.ToTensor()(imageI), torch.zeros((1, imageI.size[1], imageI.size[0]))
         kpts = kpts[kpts[:,2]==1]
-        mask = generate_channel_heatmap((imageI.size[1], imageI.size[0]), kpts, 4, torch.device("cpu"))
+        mask = generate_channel_heatmap((imageI.size[1], imageI.size[0]), kpts, 3, torch.device("cpu"))
+        # create np array from mask 
+        mask = mask.numpy()
         
+        # apply transform
+        result = self.transform(image=np.array(imageI), mask=mask)
+        image, mask = T.ToTensor()(result['image']), torch.tensor(result['mask'])       
+            
         return image, mask.unsqueeze(0) 
         
     

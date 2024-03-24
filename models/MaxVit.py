@@ -87,7 +87,7 @@ class MaxVitUnet(nn.Module):
     MODEL_NAME = "maxvit_nano_rw_256"
     feature_layers = ["stem", "stages.0", "stages.1", "stages.2", "stages.3"]
 
-    def __init__(self, n_heatmaps=1) -> None:
+    def __init__(self, n_heatmaps=1, logits=True) -> None:
         super().__init__()
         self.encoder = timm.create_model(self.MODEL_NAME, pretrained=True, num_classes=0)
         self.feature_extractor = create_feature_extractor(self.encoder, self.feature_layers)
@@ -116,6 +116,7 @@ class MaxVitUnet(nn.Module):
         # setting too low would result in loss of gradients..
         self.head.bias.data.fill_(-4)
 
+        self.logits = logits
 
     def forward(self, x):
         orig_x = torch.clone(x)
@@ -127,7 +128,8 @@ class MaxVitUnet(nn.Module):
         # x = nn.functional.interpolate(x, scale_factor=2)
         # x = self.final_conv(x)
         x = self.final_upsampling_block(x, orig_x)
-        return self.head(x)
+        out = self.head(x)
+        return torch.sigmoid(out) if not self.logits else out
 
 
 

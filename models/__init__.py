@@ -1,3 +1,4 @@
 from .UNet import UNet, UNetBN
 from .models import *
-from .MMNet import MaxVitUnet
+from .MaxVit import MaxVitUnet
+from .utils import *

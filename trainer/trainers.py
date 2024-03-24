@@ -43,6 +43,8 @@ class SegTrainer(BaseTrainer):
             self.optimizer.zero_grad() # or model.zero_grad() ??? 
             outputs = self.model(inputs)
             loss = self.loss(outputs, targets)
+            if self.model.logits:
+                outputs = torch.sigmoid(outputs)
 
             loss.backward()
             self.optimizer.step()
@@ -81,6 +83,8 @@ class SegTrainer(BaseTrainer):
 
                 outputs = self.model(inputs)
                 loss = self.loss(outputs, targets)
+                if self.model.logits:
+                    outputs = torch.sigmoid(outputs)
 
                 if i % self.log_step == 0:
                     progress = f"[{i+self.valid_data_loader.batch_size}/{len(self.valid_data_loader)}]"
@@ -97,66 +101,6 @@ class SegTrainer(BaseTrainer):
         #     self.writer.add_histogram(name, p, bins='auto')
 
         return self.metrics.epoch_end()
-
-
-class KPTrainer(BaseTrainer):
-    """
-    Trainer class
-    """
-    def __init__(self, model, loss, metrics, optimizer, config, device,
-                 data_loader, valid_data_loader, lr_scheduler=None):
-        super().__init__(model, optimizer, config)
-
-        self.device = device
-        self.train_data_loader = data_loader
-        self.valid_data_loader = valid_data_loader
-        self.lr_scheduler = lr_scheduler
-        self.loss = loss
-
-        self.log_step = config['trainer'].get('logging_step', 1)
-        self.metrics = metrics.with_writer(self.writer)
-
-
-    def _train_epoch(self, epoch):
-        """
-        Training logic for an epoch
-
-        Args:
-            epoch (int): Current training epoch.
-
-        Returns:
-            log (dict): A log that contains average loss and metric in this epoch.
-        """
-        self.model.train()
-
-        for i, (inputs , targets) in enumerate(self.train_data_loader):
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-
-            self.optimizer.zero_grad() # or model.zero_grad() ??? 
-            outputs = self.model(inputs)
-            #  nn.functional.binary_cross_entropy_with_logits(
-            #         predicted_unnormalized_maps[:, channel_idx, :, :], gt_heatmaps[channel_idx]
-            #     )
-            loss = self.loss(outputs, targets)
-
-            loss.backward()
-            self.optimizer.step()
-
-            if i % self.log_step == 0:
-                progress = f"[{i+self.train_data_loader.batch_size}/{len(self.train_data_loader)}]"
-                self.logger.info(f' -> {progress}: trainig epoch progress | loss: {loss.item():.6f}')
-                self.writer.add_image('input', make_grid(inputs.cpu(), nrow=8, normalize=True)) ### <-
-            
-            self.writer.set_step((epoch - 1) * len(self.train_data_loader) + i)
-            
-            self.metrics['loss'] = loss.item()
-            self.metrics.add(outputs, targets)
-
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
-
-        return self.metrics.epoch_end()
-    
 
 class ObjDetTrainer(BaseTrainer):
     """

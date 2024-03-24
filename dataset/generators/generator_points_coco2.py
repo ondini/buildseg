@@ -12,12 +12,12 @@ import json
   
 from collections import defaultdict
   
-DB_PATH =  "/home/kafkaon1/Dev/data/pts2.json" # "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
+DB_PATH =  "/home/kafkaon1/Dev/data/ptsRE.json" # "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
 IN_IMGS_PATH = "/local2/homes/zderaann/roof_annotations/annotated_imgs"
 
 PATCH_SIZE = 256
 
-OUT_PATH = '/home/kafkaon1/Dev/data/COCO_KPTS_2103'
+OUT_PATH = '/home/kafkaon1/Dev/data/COCO_KPTS_2303'
 
 COLORS = [
   "green",
@@ -84,21 +84,7 @@ models = {
 
 model_name = 'point_rend'
 model = init_detector(*models[model_name], device='cuda:1') 
-
-def get_new_size(old_size):
-    # get new size by keeping the aspect ratio
-    old_height, old_width = old_size
-    tgt_width, tgt_height = IMG_SHAPE_
-    if old_width / old_height > tgt_width / tgt_height:
-        new_width = tgt_width
-        new_height = int(old_height * tgt_width / old_width)
-    else:
-        new_height = tgt_height
-        new_width = int(old_width * tgt_height / old_height)
-        
-
-    
-    return (new_width, new_height)
+randomize = True
 
 def get_patch(img, x, y, pts):
     # create 256x256 patch with the point in the middle from img with prevence against overflowing
@@ -125,7 +111,9 @@ def generate(test=0.3, train=0.7):
         data = json.load(f)
 
     last_i = -1
-    
+    data_keys = list(data.keys())
+    if randomize:
+        random.shuffle(data_keys)
     for filename in ['train', 'test']:
 
         out_imgs_path = os.path.join(OUT_PATH, f'{filename}_imgs') # image path
@@ -137,8 +125,8 @@ def generate(test=0.3, train=0.7):
         annotations = []
         img_id = 0
         print(f"Starting {filename} set \n")
-    
-        for irow, key in enumerate(data.keys()): # go through all the annotations
+        
+        for irow, key in enumerate(data_keys): # go through all the annotations
             if irow <= last_i:
                 continue
             

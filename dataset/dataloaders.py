@@ -95,10 +95,8 @@ class FVDataloaderKPT(DataLoader):
     def __init__(self, coco_root, ann_file, img_prefix, batch_size=2, shuffle=True, num_workers=1, augmentation=False, **kwargs):
         if augmentation:
             transform = A.Compose([
-                A.CLAHE(),  
                 A.HorizontalFlip(p=.5),
-                A.VerticalFlip(p=.05),
-                A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=15, p=.55),
+                A.ShiftScaleRotate(shift_limit=0.02, scale_limit=0.11, rotate_limit=12, p=.55),
                 A.HueSaturationValue(),
             ]) #, bbox_params=A.BboxParams(format='pascal_voc'))
         else :
