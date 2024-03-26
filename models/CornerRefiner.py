@@ -4,11 +4,8 @@ import numpy as np
 
 from .MaxVit import MaxVitUnet
 
-
-PATCH_SIZE = 256
-
 class CornerRefiner(nn.Module):
-    def __init__(self, ckpt_path, device='cuda:0', noise_thr=0.1, conf_thr=0.2, dst_thr=10):
+    def __init__(self, ckpt_path, device='cuda:0', noise_thr=0.08, conf_thr=0.18, dst_thr=30):
         '''
             ckpt_path : path to the checkpoint of the model
             device : device to run the model on
@@ -35,21 +32,32 @@ class CornerRefiner(nn.Module):
         thr = 0.1
         out_polygon = []
         for pt in roof_polygon:
+            
             patch, offset = get_patch(img, *pt) # get patch around the point and the offset of the point in the patch
             patch = torch.from_numpy(patch).permute(2, 0, 1).unsqueeze(0).float()/255
             out = self.model(patch)
             
             sc, indi = get_keypoint_coords(out, self.noise_thr)
             ind = indi[0] # as there is no batch approach imlpemented yet
+            print(offset, ind, sc)
+            plt.imshow(patch[0].permute(1,2,0).cpu().detach().numpy())
+            plt.imshow(out[0][0].cpu().detach().numpy(), alpha=0.3)
+            plt.scatter(ind[:, 1], ind[:, 0], c='r', s=1)
+            plt.show()
+            if len(ind) == 0:
+                continue
             dists = torch.pow(ind - np.array(offset), 2).sum(axis=1)
-            
+            print(dists)         
             # closest keypoint
-            dst = torch.min(dists)
+            dst = dists.min().item()
+            dst_id = dists.argmin().item()
             
-            score = sc[0][torch.argmin(dists)]
-            if score > thr and dst < self.dst_thr:
+            score = sc[0][dst_id]
+            if score > thr and dst < self.dst_thr**2:
                 indc = ind[torch.argmin(dists)]
                 out_polygon.append(indc)
+            
+        return out_polygon
             
         
 def get_patch(img, x, y):
@@ -57,16 +65,15 @@ def get_patch(img, x, y):
     
     x_ = x if x >= PATCH_SIZE//2 else PATCH_SIZE//2
     y_ = y if y >= PATCH_SIZE//2 else PATCH_SIZE//2
-    x_ = x if x <= img.shape[1] - PATCH_SIZE//2 else img.shape[1] - PATCH_SIZE//2
-    y_ = y if y <= img.shape[0] - PATCH_SIZE//2 else img.shape[0] - PATCH_SIZE//2
+    x_ = x_ if x_ <= img.shape[1] - PATCH_SIZE//2 else img.shape[1] - PATCH_SIZE//2
+    y_ = y_ if y_ <= img.shape[0] - PATCH_SIZE//2 else img.shape[0] - PATCH_SIZE//2
     x_ = int(x_)
     y_ = int(y_)
     
     # offset of the point in the patch
     xo = x - x_ + PATCH_SIZE//2
     yo = y - y_ + PATCH_SIZE//2
-    
-    return img[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2], torch.tensor([xo, yo])
+    return img[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2], torch.tensor([yo, xo])
 
 
 def get_keypoint_coords(heatmap, noise_thr):
@@ -75,7 +82,7 @@ def get_keypoint_coords(heatmap, noise_thr):
         it is basically getting local maxima of the heatmap using maxpooling
         TODO - complete batch-based approach
     '''
-    min_keypoint_pixel_distance = 3
+    min_keypoint_pixel_distance = 5
     
     batch_size, n_channels, _, width = heatmap.shape
     heatmap[heatmap < noise_thr] = 0 # filter noise

@@ -28,6 +28,7 @@ class FVDatasetKPTS(torch.utils.data.Dataset):
         coco_root,
         ann_file,
         img_prefix,
+        sigma=3,
         transform=None,
         size_coefficient=1
     ):
@@ -43,6 +44,7 @@ class FVDatasetKPTS(torch.utils.data.Dataset):
 
         self.images = anns["images"]
         self.annotations = anns["annotations"]
+        self.sigma = sigma
         
 
     def __len__(self):
@@ -58,7 +60,7 @@ class FVDatasetKPTS(torch.utils.data.Dataset):
         if len(kpts) == 0:
             return T.ToTensor()(imageI), torch.zeros((1, imageI.size[1], imageI.size[0]))
         kpts = kpts[kpts[:,2]==1]
-        mask = generate_channel_heatmap((imageI.size[1], imageI.size[0]), kpts, 3, torch.device("cpu"))
+        mask = generate_channel_heatmap((imageI.size[1], imageI.size[0]), kpts, self.sigma, torch.device("cpu"))
         # create np array from mask 
         mask = mask.numpy()
         

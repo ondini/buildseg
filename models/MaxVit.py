@@ -131,6 +131,8 @@ class MaxVitUnet(nn.Module):
         out = self.head(x)
         return torch.sigmoid(out) if not self.logits else out
 
+        
+    
 
 
 class MaxVitPicoUnet(MaxVitUnet):

@@ -18,7 +18,9 @@ def train(config):
     # build model architecture, then print to console
     model = config.init_obj('model', models_module)
     logger.info(f'Starting training script with: { type(model).__name__}')
-
+    if "ckpt" in config['model']:
+        logger.info(f"Loading model from checkpoint: {config['model']['ckpt']['path']}")
+        models_module.load_ckpt_from_config(model, config['model']['ckpt'])
     device = torch.device(config['device'] if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 

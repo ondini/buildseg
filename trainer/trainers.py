@@ -51,7 +51,7 @@ class SegTrainer(BaseTrainer):
 
             if i % self.log_step == 0:
                 progress = f"[{i+self.train_data_loader.batch_size}/{len(self.train_data_loader)}]"
-                self.logger.info(f' -> {progress}: trainig epoch progress | loss: {loss.item():.6f}')
+                self.logger.info(f' -> {progress}: trainig epoch progress | loss: {loss.item():.6f} | lr {self.optimizer.param_groups[0]["lr"]:.6f}')
                 self.writer.add_image('input', make_grid(inputs.cpu(), nrow=8, normalize=True)) ### <-
             
             self.writer.set_step((epoch - 1) * len(self.train_data_loader) + i)

@@ -1,9 +1,9 @@
 {
     "name": "SolAR_KPdet",
-    "device": "cuda:1",
+    "device": "cuda:0",
     "gpus": [],
     "model": {
-        "type": "MaxVitUnet",
+        "type": "ConvNeXtUnet",
         "args": {}
     },
     "train_data_loader": {
@@ -16,7 +16,8 @@
             "shuffle": true,
             "num_workers": 2,
             "augmentation": true,
-            "size_coefficient": 1
+            "size_coefficient": 1,
+            "sigma": 4
         },
         "ckpt": {
             "path": "/home/kafkaon1/Dev/out/train/SolAR_KPdet/0323_091757/best_ckpt_ep21.pth",
@@ -33,7 +34,8 @@
             "shuffle": true,
             "num_workers": 2,
             "augmentation": false,
-            "size_coefficient": 1
+            "size_coefficient": 1,
+            "sigma": 3
         }
     },
     "optimizer": {
@@ -48,7 +50,7 @@
         "type": "StepLR",
         "args": {
             "step_size": 20,
-            "gamma": 0.1
+            "gamma": 0.3
         }
     },
     "loss": "BCEWithLogitsLoss",
@@ -58,7 +60,7 @@
     ],
     "trainer": {
         "type": "SegTrainer",
-        "num_epochs": 500,
+        "num_epochs": 150,
         "out_dir": "/home/kafkaon1/Dev/out/train",
         "save_metric": "max iou",
         "save_period": 3,
