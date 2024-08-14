@@ -34,9 +34,9 @@ class DeepLabv3Plus(nn.Module):
             extractor to build segmentation model.
         encoder_weights: one of ``None`` (random initialization), ``imagenet`` (pre-training on ImageNet).
     """
-    def __init__(self, num_classes, encoder_name='resnet50', encoder_weights='imagenet'):
+    def __init__(self, num_classes, logits=False, encoder_name='resnet50', encoder_weights='imagenet'):
         super().__init__()
-        ACTIVATION = 'sigmoid' # could be None for logits or 'softmax2d' for multiclass segmentation
+        ACTIVATION = 'sigmoid' if not logits else 'logits' # could be None for logits or 'softmax2d' for multiclass segmentation
         # create segmentation model with pretrained encoder
         self.model = smp.DeepLabV3Plus(
             encoder_name=encoder_name, 
@@ -44,6 +44,7 @@ class DeepLabv3Plus(nn.Module):
             classes=num_classes, 
             activation=ACTIVATION,
         )
+        self.logits = logits
     
     def forward(self, x):
         return self.model(x)

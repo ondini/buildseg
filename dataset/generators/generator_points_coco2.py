@@ -15,9 +15,9 @@ from collections import defaultdict
 DB_PATH =  "/home/kafkaon1/Dev/data/ptsRE.json" # "/local2/homes/zderaann/roof_annotations/database_updates.db" #"/local/homes/zderaann/roof_annotations/database.db"
 IN_IMGS_PATH = "/local2/homes/zderaann/roof_annotations/annotated_imgs"
 
-PATCH_SIZE = 256
+PATCH_SIZE = 224
 
-OUT_PATH = '/home/kafkaon1/Dev/data/COCO_KPTS_2303'
+OUT_PATH = '/home/kafkaon1/Dev/data/COCO_KPTS_2803'
 
 COLORS = [
   "green",

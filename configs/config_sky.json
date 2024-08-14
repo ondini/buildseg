@@ -1,0 +1,64 @@
+{
+    "name": "SolAR_UNet",
+    "device": "cuda:0",
+    "gpus": [],
+    "model": {
+        "type": "UNetBN",
+        "args": {
+            "num_classes": 1
+        }
+    },
+    "train_data_loader": {
+        "type": "FVDataloaderSkyMV",
+        "args": {
+            "dataset_path": "/home/kafkaon1/Dev/data/mapillary-vistas",
+            "split": "training",
+            "batch_size": 4,
+            "shuffle": true,
+            "num_workers": 2
+        }
+    },
+    "val_data_loader": {
+        "type": "FVDataloaderSkyMV",
+        "args": {
+            "dataset_path": "/home/kafkaon1/Dev/data/mapillary-vistas",
+            "split": "validation",
+            "batch_size": 4,
+            "shuffle": false,
+            "num_workers": 2
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args": {
+            "lr": 0.01
+        }
+    },
+    "lr_scheduler": {
+        "type": "MultiStepLR",
+        "args": {
+            "milestones": [
+                40,
+                45
+            ],
+            "gamma": 0.1
+        }
+    },
+    "loss": "BCEWithLogitsLoss",
+    "metrics": [
+        "iou",
+        "iou_3"
+    ],
+    "trainer": {
+        "type": "SegTrainer",
+        "num_epochs": 50,
+        "out_dir": "/home/kafkaon1/Dev/out",
+        "save_metric": "max iou",
+        "save_period": 1,
+        "logging_step": 40,
+        "early_stop": 20,
+        "tensorboard": true,
+        "verbosity": "INFO",
+        "args": {}
+    }
+}

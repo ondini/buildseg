@@ -19,7 +19,7 @@ IN_IMGS_PATH = "/local2/homes/zderaann/roof_annotations/annotated_imgs"
 IN_SAT_PATH = "/local2/homes/zderaann/roof_annotations/satelite"
 
 
-OUT_PATH = '/home/kafkaon1/Dev/data/COCO_0503'
+OUT_PATH = '/home/kafkaon1/Dev/data/COCO_0904'
 
 COLORS = [
   "green",
@@ -89,6 +89,17 @@ def generate(test=0.2, train=0.8):
 
     thrs = {'train': train, 'test': test + train}
 
+    last_i = -1
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM annotation")
+
+    rows = c.fetchall() # get all rows from the table = all annotations
+    #random.shuffle(rows)
+        
+    categories = [{"id": i + 1, "name": CLASSES_COCO[i]} for i in range(NUM_COCO_CLASSES)]
+    
     for filename in ['train', 'test']:
         out_imgs_path = os.path.join(OUT_PATH, f'{filename}_imgs') # image path
 
@@ -96,28 +107,23 @@ def generate(test=0.2, train=0.8):
             os.makedirs(out_imgs_path)
         
         # connect to database        
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-
-        c.execute("SELECT * FROM annotation")
-
-        rows = c.fetchall() # get all rows from the table = all annotations
-        #random.shuffle(rows)
-
-        categories = [{"id": i + 1, "name": CLASSES_COCO[i]} for i in range(NUM_COCO_CLASSES)]
-
+        
         images = []
         annotations = []
 
         for irow, row in enumerate(rows): # go through all the annotations
             if os.path.exists(os.path.join(OUT_PATH, row[0])): # image is already saved there
                 continue
+            
+            if irow <= last_i:
+                continue
+            
 
             img_fn = row[0] # filename
             img_path = os.path.join(IN_IMGS_PATH, img_fn)
             img = cv2.imread(img_path)[:,:,::-1]
             img_annotation = json.loads(row[2])
-            print(img.shape)
+            # print(img.shape)
             new_shape = get_new_size(img.shape[:2])
             # pdb.set_trace()
             img_r = cv2.resize(img, dsize=new_shape, interpolation=cv2.INTER_AREA)
@@ -172,7 +178,7 @@ def generate(test=0.2, train=0.8):
             
             # go through masks and crop out "remove" or "chimney" class masks from roof masks
             for i, mask in enumerate(masks):
-                if not labels[i] in [4, 5]: # remove or chimney
+                if not labels[i] in [2, 3, 4, 5]: # crop "remove" or "chimney", "other" or "window" from the roofplane
                     continue
                 for j, roof_mask in enumerate(roof_masks): # go through roof masks
                     roof_masks[j] = roof_masks[j] * (1 - mask)
@@ -195,7 +201,8 @@ def generate(test=0.2, train=0.8):
                     inst_ids = inst_ids[:remove_id] + inst_ids[remove_id+1:]
 
             for i, mask in enumerate(masks):
-                if labels[i] == 5: # remove class - used only for cropping, not recognized by COCO
+                if labels[i] > 4: # remove class - used only for cropping, not recognized by COCO
+                    print('aaaaaaa')
                     continue
                 # polygonize masks back as it is required by COCO format
                 contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE,
@@ -224,6 +231,7 @@ def generate(test=0.2, train=0.8):
 
             
             if irow / len(rows) > thrs[filename]:
+                last_i = irow
                 break
 
         coco_data = {

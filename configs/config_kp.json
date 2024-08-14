@@ -1,18 +1,18 @@
 {
-    "name": "SolAR_KPdet",
-    "device": "cuda:0",
+    "name": "SolAR_KPdet_MaxVitS",
+    "device": "cuda:1",
     "gpus": [],
     "model": {
-        "type": "ConvNeXtUnet",
+        "type": "MaxVitUnetS",
         "args": {}
     },
     "train_data_loader": {
         "type": "SEA_AIDataLoader",
         "args": {
-            "coco_root": "/home/kafkaon1/Dev/data/COCO_KPTS_2303",
+            "coco_root": "/home/kafkaon1/Dev/data/COCO_KPTS_2803",
             "ann_file": "annotations_train.json",
             "img_prefix": "train_imgs",
-            "batch_size": 4,
+            "batch_size": 8,
             "shuffle": true,
             "num_workers": 2,
             "augmentation": true,
@@ -27,7 +27,7 @@
     "val_data_loader": {
         "type": "SEA_AIDataLoader",
         "args": {
-            "coco_root": "/home/kafkaon1/Dev/data/COCO_KPTS_2303",
+            "coco_root": "/home/kafkaon1/Dev/data/COCO_KPTS_2803",
             "ann_file": "annotations_test.json",
             "img_prefix": "test_imgs",
             "batch_size": 4,
@@ -35,13 +35,13 @@
             "num_workers": 2,
             "augmentation": false,
             "size_coefficient": 1,
-            "sigma": 3
+            "sigma": 4
         }
     },
     "optimizer": {
         "type": "Adam",
         "args": {
-            "lr": 0.002,
+            "lr": 0.00648,
             "weight_decay": 0,
             "amsgrad": true
         }
@@ -49,7 +49,7 @@
     "lr_scheduler": {
         "type": "StepLR",
         "args": {
-            "step_size": 20,
+            "step_size": 35,
             "gamma": 0.3
         }
     },

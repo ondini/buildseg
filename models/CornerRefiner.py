@@ -1,11 +1,17 @@
+
 import torch.nn as nn
 import torch
 import numpy as np
+from .MaxVit import MaxVitUnetS
 
-from .MaxVit import MaxVitUnet
+
+PATCH_SIZE = 224
+SAMPLE_NEIGHBORS = 0
+SAMPLE_DIST = 20
+RETURN_UNCERTAIN_PTS = False
 
 class CornerRefiner(nn.Module):
-    def __init__(self, ckpt_path, device='cuda:0', noise_thr=0.08, conf_thr=0.18, dst_thr=30):
+    def __init__(self, ckpt_path, device='cuda:0', noise_thr=0.08, conf_thr=0.12, dst_thr=35):
         '''
             ckpt_path : path to the checkpoint of the model
             device : device to run the model on
@@ -14,7 +20,7 @@ class CornerRefiner(nn.Module):
             dst_thr : threshold for the distance between the refined keypoint and the original point
         '''
         super(CornerRefiner, self).__init__()
-        self.model = MaxVitUnet(logits=False)
+        self.model = MaxVitUnetS(logits=False)
         ckpt = torch.load(ckpt_path, map_location=device)
         self.model.load_state_dict(ckpt['state_dict'])
         self.noise_thr = noise_thr
@@ -31,6 +37,61 @@ class CornerRefiner(nn.Module):
         '''
         thr = 0.1
         out_polygon = []
+        heatmap_fin = np.zeros((img.shape[0], img.shape[1]))
+        for pt in roof_polygon:
+            heatmap_pt = np.zeros((img.shape[0], img.shape[1]))
+            patch, offset, x_, y_ = get_patch(img, *pt) # get patch around the point and the offset of the point in the patch
+            patch = torch.from_numpy(patch).permute(2, 0, 1).unsqueeze(0).float()/255
+            out = self.model(patch)
+            
+            heatmap_pt[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2] = out[0][0].cpu().detach().numpy()
+            heatmap_fin = np.maximum(heatmap_fin, heatmap_pt)
+
+            for i in range(SAMPLE_NEIGHBORS):
+                angle = 0 + i * 2*np.pi/SAMPLE_NEIGHBORS
+                x = pt[0] + SAMPLE_DIST*np.cos(angle)
+                y = pt[1] + SAMPLE_DIST*np.sin(angle)
+                heatmap_pt = np.zeros((img.shape[0], img.shape[1]))
+                patch, offset, x_, y_ = get_patch(img, x, y) # get patch around the point and the offset of the point in the patch
+                patch = torch.from_numpy(patch).permute(2, 0, 1).unsqueeze(0).float()/255
+                out = self.model(patch)
+                
+                heatmap_pt[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2] = out[0][0].cpu().detach().numpy()
+                heatmap_fin = np.maximum(heatmap_fin, heatmap_pt)
+            
+        htt = torch.from_numpy(heatmap_fin).unsqueeze(0).unsqueeze(0).float()
+        sc, indi = get_keypoint_coords(htt, self.noise_thr)
+        ind = indi[0] # as there is no batch approach imlpemented yet
+        if len(ind) == 0:
+            return roof_polygon, heatmap_fin
+        
+        for pt in roof_polygon:
+            dists = torch.pow(ind - np.array([pt[1], pt[0]]), 2).sum(axis=1)
+            print(dists)         
+            # closest keypoint
+            dst = dists.min().item()
+            dst_id = dists.argmin().item()
+            
+            score = sc[0][dst_id]
+            if score > self.conf_thr and dst < self.dst_thr**2:
+                print('good point')
+                indc = ind[torch.argmin(dists)]
+                out_polygon.append((indc[1], indc[0]))
+            elif RETURN_UNCERTAIN_PTS:
+                print('uncertain point')
+                out_polygon.append(pt)
+            
+        return out_polygon
+            
+    def forward_old(self, img, roof_polygon):
+        '''
+            img : np.array of shape (H, W, 3)
+            roof_polygon : polygonized roof mask to be refined
+            
+            returns : refined polygon
+        '''
+        thr = 0.1
+        out_polygon = []
         for pt in roof_polygon:
             
             patch, offset = get_patch(img, *pt) # get patch around the point and the offset of the point in the patch
@@ -39,11 +100,6 @@ class CornerRefiner(nn.Module):
             
             sc, indi = get_keypoint_coords(out, self.noise_thr)
             ind = indi[0] # as there is no batch approach imlpemented yet
-            print(offset, ind, sc)
-            plt.imshow(patch[0].permute(1,2,0).cpu().detach().numpy())
-            plt.imshow(out[0][0].cpu().detach().numpy(), alpha=0.3)
-            plt.scatter(ind[:, 1], ind[:, 0], c='r', s=1)
-            plt.show()
             if len(ind) == 0:
                 continue
             dists = torch.pow(ind - np.array(offset), 2).sum(axis=1)
@@ -58,22 +114,21 @@ class CornerRefiner(nn.Module):
                 out_polygon.append(indc)
             
         return out_polygon
-            
         
 def get_patch(img, x, y):
     # create 256x256 patch with the point in the middle from img with prevence against overflowing
     
     x_ = x if x >= PATCH_SIZE//2 else PATCH_SIZE//2
     y_ = y if y >= PATCH_SIZE//2 else PATCH_SIZE//2
-    x_ = x_ if x_ <= img.shape[1] - PATCH_SIZE//2 else img.shape[1] - PATCH_SIZE//2
-    y_ = y_ if y_ <= img.shape[0] - PATCH_SIZE//2 else img.shape[0] - PATCH_SIZE//2
+    x_ = x_ if x_ <= img.shape[1] - PATCH_SIZE//2 -1 else img.shape[1] - PATCH_SIZE//2 - 1
+    y_ = y_ if y_ <= img.shape[0] - PATCH_SIZE//2 -1 else img.shape[0] - PATCH_SIZE//2 - 1
     x_ = int(x_)
     y_ = int(y_)
     
     # offset of the point in the patch
     xo = x - x_ + PATCH_SIZE//2
     yo = y - y_ + PATCH_SIZE//2
-    return img[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2], torch.tensor([yo, xo])
+    return img[y_-PATCH_SIZE//2:y_+PATCH_SIZE//2, x_-PATCH_SIZE//2:x_+PATCH_SIZE//2], torch.tensor([yo, xo]),  x_, y_
 
 
 def get_keypoint_coords(heatmap, noise_thr):
@@ -104,3 +159,4 @@ def get_keypoint_coords(heatmap, noise_thr):
     scores, indices = torch.topk(heatmap.view(batch_size, -1), num_pts, sorted=True)
     indices = torch.stack([torch.div(indices, width, rounding_mode="floor"), indices % width], dim=-1)
     return scores, indices
+

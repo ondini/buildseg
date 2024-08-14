@@ -46,7 +46,7 @@ class UpSamplingBlock(nn.Module):
         return x
 
 
-class MaxVitUnet(nn.Module):
+class MaxVitUnet(nn.Module): #15M params
     """
     Pretrained MaxVit(MBConv (Efficient Net) + Blocked Local Attention + Grid global attention) as Encoder for the U-Net.
 
@@ -90,7 +90,7 @@ class MaxVitUnet(nn.Module):
     def __init__(self, n_heatmaps=1, logits=True) -> None:
         super().__init__()
         self.encoder = timm.create_model(self.MODEL_NAME, pretrained=True, num_classes=0)
-        self.feature_extractor = create_feature_extractor(self.encoder, self.feature_layers)
+        self.feature_extractor = create_feature_extractor(self.encoder, self.feature_layers, tracer_kwargs={'autowrap_functions': [timm.layers.padding.pad_same]})
         self.decoder_blocks = nn.ModuleList()
         for config_skip, config_in in zip(self.FEATURE_CONFIG, self.FEATURE_CONFIG[1:]):
             block = UpSamplingBlock(config_in["channels"], config_skip["channels"], config_skip["channels"], 3)
@@ -131,11 +131,8 @@ class MaxVitUnet(nn.Module):
         out = self.head(x)
         return torch.sigmoid(out) if not self.logits else out
 
-        
-    
 
-
-class MaxVitPicoUnet(MaxVitUnet):
+class MaxVitUnetP(MaxVitUnet):
     MODEL_NAME = "maxvit_rmlp_pico_rw_256"  # 7.5M params.
     FEATURE_CONFIG = [
         {"down": 2, "channels": 32},
@@ -145,10 +142,19 @@ class MaxVitPicoUnet(MaxVitUnet):
         {"down": 32, "channels": 256},
     ]
 
+class MaxVitUnetS(MaxVitUnet):
+    MODEL_NAME = "maxvit_small_tf_224"  # 64M params.
+    FEATURE_CONFIG = [
+        {"down": 2, "channels": 64},
+        {"down": 4, "channels": 96},
+        {"down": 8, "channels": 192},
+        {"down": 16, "channels": 384},
+        {"down": 32, "channels": 768},
+    ]
 
 if __name__ == "__main__":
-    model = timm.create_model("maxvit_rmlp_pico_rw_256")
-    # model = timm.create_model("maxvit_nano_rw_256")
+    #timm.list_models('*densenet*')
+    model = timm.create_model("maxvit_nano_rw_256")
     feature_extractor = create_feature_extractor(model, ["stem", "stages.0", "stages.1", "stages.2", "stages.3"])
     x = torch.zeros((1, 3, 256, 256))
     features = list(feature_extractor(x).values())
@@ -161,7 +167,7 @@ if __name__ == "__main__":
         feature_config.append(config)
     print(f"{feature_config=}")
 
-    model = MaxVitPicoUnet()
+    model = MaxVitUnetP()
     x = torch.zeros((1, 3, 256, 256))
     y = model(x)
     print(f"{y.shape=}")

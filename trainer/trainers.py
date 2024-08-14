@@ -42,10 +42,10 @@ class SegTrainer(BaseTrainer):
 
             self.optimizer.zero_grad() # or model.zero_grad() ??? 
             outputs = self.model(inputs)
+
             loss = self.loss(outputs, targets)
             if self.model.logits:
                 outputs = torch.sigmoid(outputs)
-
             loss.backward()
             self.optimizer.step()
 

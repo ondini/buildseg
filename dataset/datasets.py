@@ -423,3 +423,68 @@ def generate_annotations(annotations):
             instance_ids.append(roof_ids[i])
 
         return masks, labels, instance_ids
+
+
+def polygon_to_mask(polygon_annotations, image_shape):
+    """
+    Convert polygon annotations to a mask.
+
+    Parameters:
+    polygon_annotations (list of list of tuple): List of polygons, where each polygon is represented by a list of (x, y) tuples.
+    image_shape (tuple): Shape of the image (height, width).
+
+    Returns:
+    dict: A dictionary with keys 'mask' containing the binary mask and 'annotations' containing the polygon annotations.
+    """
+    mask = np.zeros(image_shape, dtype=np.uint8)
+
+    for object in polygon_annotations:
+        num = 1
+        if object['classTitle'] != 'sky':
+            num = 2
+        polygon = object['points']['exterior']           
+
+        polygon_np = np.array([polygon], dtype=np.int32)
+        cv2.fillPoly(mask, polygon_np, num)
+
+    
+    return (mask == 1).astype(np.int16)
+
+class SkyDataset(torch.utils.data.Dataset):
+    """A PyTorch dataset for sky detection task. Read images, apply augmentation and preprocessing transformations.
+    # Args
+        type (str): testing or training or validation
+    """
+
+    def __init__(self, root_path, split='training', size_coefficient=1, transform=None, **kwargs):
+        self.root_path = root_path
+
+        self.transform = transform
+        self.coefficient = size_coefficient
+
+        self.img_path = os.path.join(root_path, split, 'img')
+        self.names_list = os.listdir( self.img_path)
+        self.ann_path = os.path.join(root_path, split, 'ann')
+
+
+
+    def __len__(self):
+        return int(len(self.names_list)*self.coefficient)
+
+    def __getitem__(self, i):
+        image_file_path = os.path.join(self.img_path, self.names_list[i])
+        label_file_path = os.path.join(self.ann_path, self.names_list[i] +'.json')
+
+        imageI = Image.open(image_file_path)
+        #load ann file from json
+        with open(label_file_path) as f:
+            label = json.load(f)
+        tgt = polygon_to_mask(label['objects'], imageI.size[::-1])
+        
+        img = (np.array(imageI)/255.).astype(np.float32)
+        if self.transform:
+            fin = self.transform(image=img, mask=tgt)
+            img, tgt =  fin['image'], fin['mask'].unsqueeze(0).float()
+
+
+        return img, tgt
