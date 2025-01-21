@@ -8,10 +8,10 @@ import cv2
 import numpy as np
 
 import sys
-sys.path.append("/home/kafkaon1/FVAPP/third_party")
+sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party")
 from projectRegularization import GeneratorResNet,Encoder, regularization
 
-sys.path.append("/home/kafkaon1/FVAPP/third_party/segment-anything/")
+sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
 from segment_anything import sam_model_registry, SamPredictor
 from skimage import measure
 

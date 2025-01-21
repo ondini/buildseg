@@ -100,7 +100,7 @@ def train(args):
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=0.00001) # factor of 10 lower when I am funetuning
     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.0001, steps_per_epoch=len(train_loader), epochs=num_epochs) if args.scheduler else None
-    loss = DistanceWeightBCELoss(alpha=0.1, theta=3) #CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
+    loss = nn.BCELoss() # DistanceWeightBCELoss(alpha=0.1, theta=3) #CombLoss(alpha=0.89) #DistanceWeightBCELoss(alpha=0.2, theta=5) #nn.BCELoss(reduction='mean') #CombLoss(alpha=0.84) #DistanceWeightBCELoss(alpha=0.5) #alpha=0.8) #CombLoss(alpha=0.7)  
 
     metric_names = ["iou", "dice", "precision", "recall", "matthews"]
     metrics = {
@@ -163,9 +163,9 @@ if __name__ == '__main__':
     parser.add_argument("--loss", type=str,  choices={'BinaryDice'}, default='BinaryDice')
     parser.add_argument("--num_epochs", type=int,  default=30)
     parser.add_argument("--device", type=str,  choices={'cuda:0', 'cuda:1', 'cpu'}, default='cuda:0')
-    parser.add_argument("--checkpoint_path", type=str, default='/home/kafkaon1/FVAPP/out/train/run_230503-140231/checkpoints/Deeplabv3_err:0.194_ep:15.pth') #/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
-    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/FVAPP/out/train')
-    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/FVAPP/data/FV')
+    parser.add_argument("--checkpoint_path", type=str, default='') #/home/kafkaon1/Dev/FVAPP/out/train/run_230503-140231/checkpoints/Deeplabv3_err:0.194_ep:15.pth') #/home/kafkaon1/FVAPP/out/run_230503-140231/checkpoints/Deeplabv3_err:0.176_ep:16.pth')
+    parser.add_argument("--out_path", type=str, default='/home/kafkaon1/Dev/FVAPP/out/train')
+    parser.add_argument("--dataset_path", type=str, default='/home/kafkaon1/Dev/data/FV')
     parser.add_argument("--dataset_coeff", type=float, default=1/18)
     parser.add_argument("--batch_size_train", type=int, default=20)
     parser.add_argument("--batch_size_val", type=int, default=8)
