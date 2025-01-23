@@ -6,14 +6,12 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 import cv2
 import numpy as np
+from skimage import measure
 
 import sys
-sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party")
+sys.path.append("./third_party")
 from projectRegularization import GeneratorResNet,Encoder, regularization
 
-sys.path.append("/home/kafkaon1/Dev/FVAPP/third_party/segment-anything/")
-from segment_anything import sam_model_registry, SamPredictor
-from skimage import measure
 
 def createDeepLabv3(outputchannels):
     """ DeepLabv3
@@ -51,35 +49,33 @@ def createDeepLabv3Plus(outputchannels):
     return model
 
 class DLV3Reg(nn.Module):
-    def __init__(self, segmentator, 
-                 generator='/home/kafkaon1/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_net', 
-                 encoder='/home/kafkaon1/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',
-                 sam = '/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth',
-                 sam_type = 'vit_h',
-                 do_sam = False,
-                 do_reg = True,
-                 do_poly = False,
-                 device = 'cuda:0'):
+    def __init__(self, do_reg=True, do_poly=True):
         super(DLV3Reg, self).__init__()
-        self.modelSeg = torch.load(segmentator)
-        self.modelSeg.to(device)
 
+        self.modelSeg = smp.DeepLabV3Plus(
+            encoder_name='resnet50',
+            activation='sigmoid',
+        ) 
+        
+        self.do_poly = do_poly  
         self.do_reg = do_reg
         if self.do_reg:
             self.encReg = Encoder()
             self.genReg = GeneratorResNet()
-            self.genReg.load_state_dict(torch.load(generator, map_location=torch.device('cuda:0')))
-            self.encReg.load_state_dict(torch.load(encoder , map_location=torch.device('cuda:0')))
+                    
+    
+    def load_weights(self, segmentator,
+                 generator='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_net', 
+                 encoder='/home/kafkaon1/Dev/FVAPP/third_party/projectRegularization/saved_models_gan/E140000_e1',
+                 device='cuda:0'):
+        self.modelSeg.load_state_dict(torch.load(segmentator))
+        self.modelSeg.to(device)
+
+        if self.do_reg:
+            self.genReg.load_state_dict(torch.load(generator))
+            self.encReg.load_state_dict(torch.load(encoder))
             self.encReg.to(device)
             self.genReg.to(device)
-        
-        self.do_sam = do_sam
-        if self.do_sam:
-            sam = sam_model_registry["vit_h"](checkpoint="/home/kafkaon1/FVAPP/third_party/segment-anything/wghs.pth")
-            sam.to(device)
-            self.samPred = SamPredictor(sam) 
-        
-        self.do_poly = do_poly
 
     def predict(self, input):
         seg = (self.modelSeg(input) > 0.5).float()
@@ -87,21 +83,10 @@ class DLV3Reg(nn.Module):
         if not self.do_reg and not self.do_sam and not self.do_poly:
             return seg
         reg = []
+        poly = [] if self.do_poly else None
         for i in range(seg.shape[0]):
             seg_i = seg[i,0,:,:].detach().cpu().numpy()
             in_i = (input[i,:,:,:].detach().cpu().permute(1,2,0).numpy()*255).astype(np.uint8)
-            if self.do_sam:
-                self.samPred.set_image(in_i)
-                bbxs = self.getBBxs(seg_i)
-                t_bbxs = self.samPred.transform.apply_boxes_torch(bbxs, in_i.shape[:2])
-
-                masks, _, _ = self.samPred.predict_torch(
-                    point_coords=None,
-                    point_labels=None,
-                    boxes=t_bbxs,
-                    multimask_output=False,
-                )
-                seg_i = masks.sum(axis=(0))[0].detach().cpu().numpy()
 
             if self.do_reg:
                 reg_i = regularization(in_i, seg_i, [self.encReg, self.genReg])
@@ -111,10 +96,11 @@ class DLV3Reg(nn.Module):
             if self.do_poly:
                 polygons = extractPolygons(reg_i, 0.005)
                 reg_i = labelFromPolygons(polygons, in_i.shape[:2])
+                poly.append(polygons)
             
             reg.append(torch.tensor(reg_i.astype(np.uint8)))
                 
-        return torch.stack(reg).unsqueeze(1).float()
+        return torch.stack(reg).unsqueeze(1).float(), poly
     
     def getBBxs(self, ins_segmentation):
         ins_segmentation = np.uint16(measure.label(ins_segmentation, background=0))
