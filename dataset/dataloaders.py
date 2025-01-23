@@ -16,22 +16,23 @@ class FVDataloader(DataLoader):
     """
 
     """
-    def __init__(self, dataset_path, names_file, batch_size=2, shuffle=True, num_workers=1, **kwargs):
-        transform = A.Compose([
-            A.RandomCrop(width=256, height=256),
-            A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(p=0.2),
-        ])
+    def __init__(self, dataset_path, batch_size=2, shuffle=True, num_workers=1, **kwargs):
+        # transform = A.Compose([
+        #     A.RandomCrop(width=256, height=256),
+        #     A.HorizontalFlip(p=0.5),
+        #     A.RandomBrightnessContrast(p=0.2),
+        # ])
 
-        data_path = Path(dataset_path) / 'fac_imgs'
-        label_path = Path(dataset_path) / 'fac_labels'
+        data_path = Path(dataset_path) / 'image_resized' #'fac_imgs'
+        label_path = Path(dataset_path) / 'label_resized' #'fac_labels'
 
         self.dataset = FVDataset(
             str(data_path), str(label_path), 
-            names_path=str( Path(dataset_path)/ names_file),
             **kwargs
         )
+        # names_path=str( Path(dataset_path)/ names_file),
         super().__init__(self.dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
 
 def collate_fn(batch):
     return tuple(zip(*batch))   

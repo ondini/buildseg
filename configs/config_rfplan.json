@@ -1,0 +1,66 @@
+{
+    "name": "SolAR_DLV3Pl",
+    "device": "cuda:1",
+    "gpus": [],
+    "model": {
+        "type": "DeepLabv3Plus",
+        "args": {
+            "num_classes": 1,
+            "logits": true
+        }
+    },
+    "train_data_loader": {
+        "type": "FVDataloader",
+        "args": {
+            "dataset_path": "/home/kafkaon1/Dev/data/FV/train",
+            "batch_size": 4,
+            "shuffle": true,
+            "num_workers": 2,
+            "augmentation": true,
+            "coefficient": 0.4
+        }
+    },
+    "val_data_loader": {
+        "type": "FVDataloader",
+        "args": {
+            "dataset_path": "/home/kafkaon1/Dev/data/FV/val",
+            "batch_size": 4,
+            "shuffle": false,
+            "num_workers": 2,
+            "augmentation": false,
+            "coefficient": 0.4
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args": {
+            "lr": 0.001,
+            "weight_decay": 0,
+            "amsgrad": true
+        }
+    },
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 9,
+            "gamma": 0.1
+        }
+    },
+    "loss": "BCEWithLogitsLoss",
+    "metrics": [
+        "iou",
+        "iou_3"
+    ],
+    "trainer": {
+        "type": "SegTrainer",
+        "num_epochs": 20,
+        "out_dir": "/home/kafkaon1/Dev/out",
+        "save_metric": "max iou",
+        "save_period": 1,
+        "logging_step": 1,
+        "early_stop": 10,
+        "tensorboard": true,
+        "verbosity": "INFO",
+        "args": {}
+    }
+}

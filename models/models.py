@@ -36,7 +36,7 @@ class DeepLabv3Plus(nn.Module):
     """
     def __init__(self, num_classes, logits=False, encoder_name='resnet50', encoder_weights='imagenet'):
         super().__init__()
-        ACTIVATION = 'sigmoid' if not logits else 'logits' # could be None for logits or 'softmax2d' for multiclass segmentation
+        ACTIVATION = 'sigmoid' if not logits else None # could be None for logits or 'softmax2d' for multiclass segmentation
         # create segmentation model with pretrained encoder
         self.model = smp.DeepLabV3Plus(
             encoder_name=encoder_name, 

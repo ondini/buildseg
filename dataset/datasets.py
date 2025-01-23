@@ -211,6 +211,15 @@ class FVDataset(torch.utils.data.Dataset):
         self.augmentation = augmentation
 
         self.coefficient = size_coefficient
+        if size_coefficient < 1:
+            # create shuffled ids array:
+            self.ids = np.arange(len(self.image_fns))
+            np.random.shuffle(self.ids, random_state=42)
+            self.ids = self.ids[:int(len(self.image_fns)*self.coefficient)]
+
+            self.image_fns = [self.image_fns[i] for i in self.ids]
+            self.label_fns = [self.label_fns[i] for i in self.ids]
+            
 
     def __len__(self):
         return int(len(self.image_fns)*self.coefficient)
